@@ -1,0 +1,1645 @@
+import os
+import sys
+# Add parent directory to path to enable local database imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
+import fitz  # PyMuPDF
+from PIL import Image
+import io
+import time
+import re
+from collections import defaultdict
+from fastapi import FastAPI, UploadFile, File, HTTPException, Body, Depends, Request, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from google import genai
+from groq import Groq
+import json
+from sqlalchemy.orm import Session
+from database.db import SessionLocal
+from config.settings import ENVIRONMENT
+
+from database.models import Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
+
+app = FastAPI()
+
+# Allow Next.js frontend to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+):\d+",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# HTTP middleware to inject security headers into every response
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 http://localhost:3000 http://127.0.0.1:3000; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;"
+    )
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+from typing import Optional
+from pydantic import BaseModel
+
+class MeetingCreate(BaseModel):
+    startup_id: int
+    meeting_type: Optional[str] = "Initial Pitch"
+    ai_summary: Optional[str] = ""
+    duration_minutes: Optional[int] = 30
+    raw_transcript: Optional[str] = ""
+    key_concerns: Optional[list] = None
+    action_items: Optional[list] = None
+    founder_score: Optional[int] = 85
+    live_mode_used: Optional[bool] = False
+
+class MeetingUpdate(BaseModel):
+    startup_id: Optional[int] = None
+    meeting_type: Optional[str] = None
+    ai_summary: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    key_concerns: Optional[str] = None
+    action_items: Optional[str] = None
+    founder_score: Optional[int] = None
+
+class CopilotAnalyzeRequest(BaseModel):
+    transcript: str
+
+class OutreachGenerateRequest(BaseModel):
+    startup_name: str
+    founder_name: Optional[str] = ""
+    template_type: Optional[str] = "Standard Warm Intro"
+
+class StartupCreate(BaseModel):
+    name: str = "New Startup"
+    sector: Optional[str] = ""
+    stage: Optional[str] = ""
+    website: Optional[str] = ""
+    location: Optional[str] = ""
+    description: Optional[str] = ""
+    revenue_arr: Optional[str] = ""
+    valuation: Optional[str] = ""
+    pipeline_stage: Optional[str] = "Sourced"
+
+class StartupUpdate(BaseModel):
+    name: Optional[str] = None
+    sector: Optional[str] = None
+    stage: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    revenue_arr: Optional[str] = None
+    revenue_growth_pct: Optional[str] = None
+    ai_score: Optional[int] = None
+    investment_verdict: Optional[str] = None
+    ai_summary: Optional[str] = None
+    pipeline_stage: Optional[str] = None
+    valuation: Optional[str] = None
+
+class FounderCreate(BaseModel):
+    startup_id: int
+    name: str = "New Founder"
+    email: Optional[str] = ""
+    title: Optional[str] = ""
+    background: Optional[str] = ""
+
+class FounderUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    linkedin: Optional[str] = None
+    twitter: Optional[str] = None
+    title: Optional[str] = None
+    background: Optional[str] = None
+
+class TaskCreate(BaseModel):
+    title: str
+    startup_id: Optional[int] = None
+    assignee: Optional[str] = "Sarah Jenkins"
+    priority: Optional[str] = "Medium"
+    status: Optional[str] = "Pending"
+    due_date: Optional[str] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    assignee: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
+
+class NoteCreate(BaseModel):
+    startup_id: int
+    founder_id: Optional[int] = None
+    author: Optional[str] = "Sarah Jenkins"
+    content: str
+    note_type: Optional[str] = "manual"
+    source: Optional[str] = "web"
+    tags: Optional[list] = None
+
+class NoteUpdate(BaseModel):
+    content: Optional[str] = None
+    note_type: Optional[str] = None
+    tags: Optional[list] = None
+
+class PortfolioCreate(BaseModel):
+    startup_id: int
+    current_valuation: Optional[str] = ""
+    current_ownership: Optional[float] = 0.0
+    runway_months: Optional[int] = 12
+    burn_rate: Optional[str] = ""
+    risk_level: Optional[str] = "LOW"
+
+class PortfolioUpdate(BaseModel):
+    current_valuation: Optional[str] = None
+    current_ownership: Optional[float] = None
+    runway_months: Optional[int] = None
+    burn_rate: Optional[str] = None
+    risk_level: Optional[str] = None
+
+class OutreachUpdateStatus(BaseModel):
+    status: str
+
+class MemoGenerateRequest(BaseModel):
+    startup_name: str
+
+class PipelineUpdate(BaseModel):
+    stage: str
+
+def parse_gemini_json(response_text: str):
+    """Robust JSON parser to prevent 'Expecting value: line 1' errors."""
+    try:
+        # Strip markdown formatting if Gemini wrapped it in ```json ... ```
+        clean_text = response_text.replace("```json", "").replace("```", "").strip()
+        start = clean_text.find("{")
+        end = clean_text.rfind("}") + 1
+        if start == -1 or end == 0:
+            raise ValueError("No JSON object found")
+        return json.loads(clean_text[start:end])
+    except Exception as e:
+        print(f"JSON Parsing Error: {e}")
+        return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTHENTICATION ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+from backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
+from pydantic import BaseModel
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+from database.db import SessionLocal, get_db
+
+# Security Rate Limiting & Password Validation
+login_signup_rate_limit_data = defaultdict(list)
+
+def check_rate_limit(request: Request):
+    client_ip = request.client.host if (request.client and request.client.host) else "127.0.0.1"
+    now = time.time()
+    # Keep only requests from the last 60 seconds
+    login_signup_rate_limit_data[client_ip] = [
+        t for t in login_signup_rate_limit_data[client_ip] if now - t < 60
+    ]
+    # Limit to 5 attempts per 60 seconds per IP
+    if len(login_signup_rate_limit_data[client_ip]) >= 5:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Please try again after 60 seconds."
+        )
+    login_signup_rate_limit_data[client_ip].append(now)
+
+def validate_password_complexity(password: str):
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters long."
+        )
+    if not re.search(r'[A-Z]', password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one uppercase letter."
+        )
+    if not re.search(r'[a-z]', password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one lowercase letter."
+        )
+    if not re.search(r'\d', password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one digit."
+        )
+    if not re.search(r'[^a-zA-Z0-9]', password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one special character."
+        )
+
+@app.post("/api/auth/signup")
+def signup(user: UserCreate, request: Request, db_session: Session = Depends(get_db)):
+    check_rate_limit(request)
+    validate_password_complexity(user.password)
+    try:
+        existing = db_session.query(User).filter(User.email == user.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        hashed = get_password_hash(user.password)
+        new_user = User(email=user.email, full_name=user.full_name, hashed_password=hashed)
+        db_session.add(new_user)
+        db_session.commit()
+        db_session.refresh(new_user)
+        
+        # Auto-generate token so they are logged in immediately
+        access_token = create_access_token(data={"sub": new_user.email})
+        return {"access_token": access_token, "token_type": "bearer", "user": {"email": new_user.email, "name": new_user.full_name}}
+    finally:
+        db_session.close()
+
+@app.post("/api/auth/login")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db_session: Session = Depends(get_db)):
+    check_rate_limit(request)
+    try:
+        user = db_session.query(User).filter(User.email == form_data.username).first()
+        if not user or not verify_password(form_data.password, user.hashed_password):
+            raise HTTPException(status_code=400, detail="Incorrect email or password")
+            
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer", "user": {"email": user.email, "name": user.full_name}}
+    finally:
+        db_session.close()
+
+@app.get("/api/auth/me")
+def read_users_me(current_user: User = Depends(get_current_user)):
+    return {"email": current_user.email, "name": current_user.full_name, "role": current_user.role}
+
+
+
+# --- Existing Upload Deck ---
+@app.post("/api/upload-deck")
+async def upload_deck(file: UploadFile = File(...)):
+    print(f"[API] Received file: {file.filename}")
+    
+    contents = await file.read()
+    import base64
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("[WARNING] GROQ_API_KEY not found. Returning graceful fallback data.")
+        return {
+            "company": file.filename.replace(".pdf", ""),
+            "confidence": 75,
+            "metrics": { "revenue": "API KEY MISSING", "growth": "N/A", "runway": "N/A" },
+            "thesis": "Groq API key not configured. This is a fallback response. Please add GROQ_API_KEY to your .env file to enable multimodal vision extraction.",
+            "risks": ["Missing GROQ_API_KEY"],
+            "comps": ["N/A"]
+        }
+
+    try:
+        client = Groq(api_key=api_key)
+
+        print("[PDF] Converting PDF to Images via PyMuPDF...")
+        doc = fitz.open(stream=contents, filetype="pdf")
+        
+        vision_messages = []
+        prompt = """
+        You are a top-tier Venture Capital Partner at Palantir Foundry.
+        Analyze these pitch deck slides. Extract the exact numbers from the charts and tables.
+        CRITICAL: Identify the real company name from the title slide. Extract all details about the team/founder, market size (TAM), traction metrics (revenue, growth, runway), GTM strategy, product solution, problem, and competitive moat. 
+        Respond ONLY with a valid JSON object matching this schema, no other text:
+        {
+          "company": "Company Name",
+          "sector": "e.g. AI / ML or DevTools / Infra or Enterprise SaaS or FinTech or HealthTech",
+          "stage": "e.g. Pre-seed or Seed or Series A or Series B",
+          "description": "2-3 sentences evaluating technical moat and GTM efficiency.",
+          "problem": "1-2 sentences summarizing the problem.",
+          "solution": "1-2 sentences summarizing the product solution.",
+          "moat": "1-2 sentences detailing the competitive moat.",
+          "gtm": "1-2 sentences detailing the GTM strategy.",
+          "metrics": { "revenue": "e.g. $1.5M ARR or N/A", "growth": "e.g. 120% YoY or N/A", "runway": "e.g. 12 months or N/A" },
+          "thesis": "Investment thesis...",
+          "risks": ["Risk 1", "Risk 2"],
+          "comps": ["Comp 1", "Comp 2"],
+          "founder": {
+            "name": "Founder's Full Name (or N/A)",
+            "title": "e.g. CEO or CEO & Founder",
+            "email": "e.g. founder@domain.com (if not found, generate based on name and company domain)",
+            "background": "Education and professional pedigree from the team slide"
+          },
+          "scoring": {
+            "Team & Founder Quality": 8,
+            "Market Size & Timing": 8,
+            "Product & Technology": 8,
+            "Traction & Revenue Quality": 7,
+            "Growth Rate & Momentum": 8,
+            "Business Model & Unit Economics": 7,
+            "Competitive Moat & Defensibility": 8,
+            "GTM & Distribution": 7,
+            "Execution Speed": 8,
+            "Fundraising Quality & Terms": 7,
+            "total_score": 79,
+            "verdict": "INVEST",
+            "rationale": "High-conviction rationale..."
+          }
+        }
+        """
+        
+        vision_content = [{"type": "text", "text": prompt}]
+        
+        for i in range(min(5, len(doc))):
+            page = doc.load_page(i)
+            pix = page.get_pixmap()
+            img_bytes = pix.tobytes("png")
+            b64_img = base64.b64encode(img_bytes).decode('utf-8')
+            vision_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64_img}"}
+            })
+            
+        if len(vision_content) == 1:
+            raise HTTPException(status_code=400, detail="No readable slides found in PDF.")
+
+        print(f"[GROQ] Sending slides to Groq Vision...")
+        
+        response = client.chat.completions.create(
+            model='llama-3.2-11b-vision-preview',
+            messages=[{"role": "user", "content": vision_content}],
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+        print("[OK] Received Groq response")
+        
+        parsed_data = parse_gemini_json(response.choices[0].message.content)
+        if not parsed_data:
+            raise HTTPException(status_code=500, detail="Failed to parse JSON from Gemini. " + response.text[:100])
+            
+        # Try to save to DB
+        db = SessionLocal()
+        try:
+            startup = Startup(
+                name=parsed_data.get("company", "Unknown"),
+                sector=parsed_data.get("sector", "AI / ML"),
+                stage=parsed_data.get("stage", "Sourced"),
+                description=parsed_data.get("description", ""),
+                problem=parsed_data.get("problem", ""),
+                solution=parsed_data.get("solution", ""),
+                moat=parsed_data.get("moat", ""),
+                gtm=parsed_data.get("gtm", ""),
+                revenue_arr=parsed_data.get("metrics", {}).get("revenue", "N/A"),
+                revenue_growth_pct=parsed_data.get("metrics", {}).get("growth", "N/A"),
+                ai_score=parsed_data.get("scoring", {}).get("total_score", 70),
+                investment_verdict=parsed_data.get("scoring", {}).get("verdict", "HOLD"),
+                ai_summary=parsed_data.get("thesis", ""),
+                tags=[parsed_data.get("sector", "AI / ML"), parsed_data.get("stage", "Sourced")]
+            )
+            db.add(startup)
+            db.commit()
+            db.refresh(startup)
+            
+            # Save founder details if present
+            f_data = parsed_data.get("founder", {})
+            if f_data and f_data.get("name") != "N/A":
+                founder = Founder(
+                    startup_id=startup.id,
+                    name=f_data.get("name", "Unknown Founder"),
+                    title=f_data.get("title", "Founder"),
+                    email=f_data.get("email", ""),
+                    background=f_data.get("background", ""),
+                    previous_companies=[],
+                    trust_score=85,
+                    responsiveness_score=85,
+                    execution_score=85
+                )
+                db.add(founder)
+                db.commit()
+                
+            # Save score details
+            sc_data = parsed_data.get("scoring", {})
+            if sc_data:
+                dimensions = {
+                    "Team & Founder Quality": sc_data.get("Team & Founder Quality", 7),
+                    "Market Size & Timing": sc_data.get("Market Size & Timing", 7),
+                    "Product & Technology": sc_data.get("Product & Technology", 7),
+                    "Traction & Revenue Quality": sc_data.get("Traction & Revenue Quality", 7),
+                    "Growth Rate & Momentum": sc_data.get("Growth Rate & Momentum", 7),
+                    "Business Model & Unit Economics": sc_data.get("Business Model & Unit Economics", 7),
+                    "Competitive Moat & Defensibility": sc_data.get("Competitive Moat & Defensibility", 7),
+                    "GTM & Distribution": sc_data.get("GTM & Distribution", 7),
+                    "Execution Speed": sc_data.get("Execution Speed", 7),
+                    "Fundraising Quality & Terms": sc_data.get("Fundraising Quality & Terms", 7)
+                }
+                score = Score(
+                    startup_id=startup.id,
+                    dimensions=dimensions,
+                    total_score=sc_data.get("total_score", 70),
+                    verdict=sc_data.get("verdict", "HOLD"),
+                    rationale=sc_data.get("rationale", "")
+                )
+                db.add(score)
+                db.commit()
+        except Exception as dberr:
+            db.rollback()
+            print(f"Failed to save extracted deck startup: {dberr}")
+        finally:
+            db.close()
+
+        return parsed_data
+
+    except Exception as e:
+        print(f"[ERROR] Backend Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An internal orchestration error occurred: {str(e)}")
+
+# --- Meetings ---
+@app.get("/api/meetings")
+def get_meetings(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        meetings = db.query(Meeting).all()
+        results = []
+        for m in meetings:
+            startup = db.query(Startup).filter(Startup.id == m.startup_id).first()
+            results.append({
+                "id": m.id,
+                "startup_id": m.startup_id,
+                "startup_name": startup.name if startup else "Unknown",
+                "meeting_type": m.meeting_type,
+                "scheduled_at": m.scheduled_at.isoformat() if m.scheduled_at else None,
+                "duration_minutes": m.duration_minutes,
+                "ai_summary": m.ai_summary,
+                "key_concerns": m.key_concerns,
+                "action_items": m.action_items,
+                "founder_score": m.founder_score,
+                "raw_transcript": m.raw_transcript,
+                "live_mode_used": m.live_mode_used
+            })
+        return results
+    finally:
+        db.close()
+
+from datetime import datetime
+@app.post("/api/meetings")
+def create_meeting(payload: MeetingCreate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        new_meeting = Meeting(
+            startup_id=payload.startup_id,
+            meeting_type=payload.meeting_type,
+            ai_summary=payload.ai_summary,
+            duration_minutes=payload.duration_minutes,
+            scheduled_at=datetime.utcnow()
+        )
+        db.add(new_meeting)
+        db.commit()
+        db.refresh(new_meeting)
+        return {"id": new_meeting.id, "message": "Meeting logged successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/meetings/{meeting_id}")
+def update_meeting(meeting_id: int, payload: MeetingUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        for key, value in payload.dict(exclude_unset=True).items():
+            if hasattr(meeting, key):
+                setattr(meeting, key, value)
+                
+        db.commit()
+        return {"message": "Meeting updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/meetings/{meeting_id}")
+def delete_meeting(meeting_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        db.delete(meeting)
+        db.commit()
+        return {"message": "Meeting deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# --- Live Meeting Copilot Analysis ---
+@app.post("/api/analyze-copilot")
+def analyze_copilot(payload: CopilotAnalyzeRequest, current_user: User = Depends(get_current_user)):
+    transcript = payload.transcript
+    api_key = os.getenv("GROQ_API_KEY")
+    
+    if not api_key:
+        return {
+            "metrics": ["$2M ARR (indicated)", "3x YoY growth claims"],
+            "red_flags": ["Founder deflected question on CAC/LTV", "Engineering team retention issues mentioned"],
+            "follow_ups": ["Request audited financials", "Get cohort retention curves"],
+            "sentiment": "Neutral-Positive"
+        }
+        
+    try:
+        client = Groq(api_key=api_key)
+        prompt = f"""
+        You are a VC Copilot listening to a live founder meeting. 
+        Analyze the following transcript segment. Extract any key financial/traction metrics, list key red flags or risks, and suggest direct follow-up questions.
+        Return a JSON object only:
+        {{
+           "metrics": ["metric 1", "metric 2"],
+           "red_flags": ["flag 1", "flag 2"],
+           "follow_ups": ["question 1", "question 2"],
+           "sentiment": "Positive/Neutral/Concise"
+        }}
+        
+        Transcript:
+        {transcript}
+        """
+        response = client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        parsed = parse_gemini_json(response.choices[0].message.content)
+        if parsed:
+            return parsed
+        return {"metrics": [], "red_flags": [], "follow_ups": [], "sentiment": "Error"}
+    except Exception as e:
+        print(f"Copilot error: {e}")
+        return {"metrics": [], "red_flags": [f"Analysis Error: {str(e)}"], "follow_ups": [], "sentiment": "Unknown"}
+
+# --- Outreach ---
+@app.get("/api/outreach")
+def get_outreach(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        emails = db.query(OutreachEmail).all()
+        results = []
+        for e in emails:
+            startup = db.query(Startup).filter(Startup.id == e.startup_id).first()
+            founder = db.query(Founder).filter(Founder.id == e.founder_id).first()
+            results.append({
+                "id": e.id,
+                "startup_id": e.startup_id,
+                "startup_name": startup.name if startup else "Unknown",
+                "founder_name": founder.name if founder else "Unknown",
+                "template_type": e.template_type,
+                "subject": e.subject,
+                "body": e.body,
+                "sent_at": e.sent_at.isoformat() if e.sent_at else None,
+                "opened_at": e.opened_at.isoformat() if e.opened_at else None,
+                "replied_at": e.replied_at.isoformat() if e.replied_at else None,
+                "thread_id": e.gmail_thread_id
+            })
+        return results
+    finally:
+        db.close()
+
+@app.post("/api/generate-outreach")
+def generate_outreach(payload: OutreachGenerateRequest, current_user: User = Depends(get_current_user)):
+    startup_name = payload.startup_name
+    founder_name = payload.founder_name
+    template_type = payload.template_type
+    
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.name == startup_name).first()
+        founder = db.query(Founder).filter(Founder.name == founder_name).first() if founder_name else None
+        
+        desc = startup.description if startup else "an exciting AI tech startup"
+        sector = startup.sector if startup else "Deep Tech"
+    finally:
+        db.close()
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "your_gemini_api_key_here":
+        # Return fallback template
+        return {
+            "subject": f"{startup_name} / SR Capital",
+            "body": f"Hi {founder_name or 'there'},\n\nI was reviewing companies in the {sector} space and came across {startup_name}. I was really impressed by your focus on {desc}.\n\nWe recently closed our $450M Fund II at SR Capital and are actively looking to support high-conviction teams. Would you be open to a 15-minute intro call next week to share the vision?\n\nBest regards,\nSarah Jenkins\nPartner, SR Capital"
+        }
+        
+    try:
+        client = genai.Client(api_key=api_key)
+        prompt = f"""
+        Write a professional, personalized venture capital outreach email from Sarah Jenkins, Partner at SR Capital (recently launched $450M Fund II), to founder {founder_name or 'there'} of {startup_name}.
+        The startup is in sector {sector} and focuses on: {desc}.
+        The template type selected is: '{template_type}'.
+        Keep it direct, compelling, dense, and avoid corporate fluff or cheesy AI greetings.
+        Return ONLY a JSON object:
+        {{
+           "subject": "Email Subject",
+           "body": "Email Body"
+        }}
+        """
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        parsed = parse_gemini_json(response.text)
+        if parsed:
+            return parsed
+        raise ValueError("JSON parse failed")
+    except Exception as e:
+        print(f"Email gen error: {e}")
+        return {
+            "subject": f"{startup_name} / SR Capital",
+            "body": f"Hi {founder_name or 'there'},\n\nI wanted to reach out regarding {startup_name}. We lead seed/series A in {sector} and are inspired by what you're building.\n\nLet me know if you have 15 mins for a quick call.\n\nBest,\nSarah"
+        }
+
+# --- Scores ---
+@app.get("/api/scores")
+def get_scores(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        scores = db.query(Score).all()
+        results = []
+        for sc in scores:
+            startup = db.query(Startup).filter(Startup.id == sc.startup_id).first()
+            results.append({
+                "id": sc.id,
+                "startup_id": sc.startup_id,
+                "startup_name": startup.name if startup else "Unknown",
+                "dimensions": sc.dimensions,
+                "total_score": sc.total_score,
+                "verdict": sc.verdict,
+                "rationale": sc.rationale
+            })
+        return results
+    finally:
+        db.close()
+
+# --- Leads (Sourcing) ---
+@app.get("/api/leads")
+def get_leads(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        leads = db.query(SourcingLead).all()
+        results = []
+        for l in leads:
+            results.append({
+                "id": l.id,
+                "company_name": l.company_name,
+                "website": l.website,
+                "description": l.description,
+                "source": l.source,
+                "signal_score": l.signal_score,
+                "status": l.status,
+                "discovered_at": l.discovered_at.isoformat() if l.discovered_at else None
+            })
+        return results
+    finally:
+        db.close()
+
+# --- Startups ---
+@app.get("/api/startups")
+def get_startups(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startups = db.query(Startup).all()
+        results = []
+        for s in startups:
+            results.append({
+                "id": s.id,
+                "name": s.name,
+                "sector": s.sector,
+                "stage": s.stage,
+                "description": s.description,
+                "revenue_arr": s.revenue_arr,
+                "revenue_growth_pct": s.revenue_growth_pct,
+                "ai_score": s.ai_score,
+                "investment_verdict": s.investment_verdict,
+                "ai_summary": s.ai_summary,
+                "pipeline_stage": s.pipeline_stage,
+                "valuation": s.valuation,
+                "website": s.website,
+                "location": s.location
+            })
+        return results
+    finally:
+        db.close()
+
+# --- Tasks ---
+@app.post("/api/tasks")
+def create_task(payload: TaskCreate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        due = None
+        if payload.due_date:
+            try:
+                due = datetime.fromisoformat(payload.due_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        new_task = Task(
+            title=payload.title,
+            startup_id=payload.startup_id,
+            assignee=payload.assignee or "Sarah Jenkins",
+            priority=payload.priority or "Medium",
+            status=payload.status or "Pending",
+            due_date=due,
+            source="web"
+        )
+        db.add(new_task)
+        db.commit()
+        db.refresh(new_task)
+        return {"id": new_task.id, "message": "Task created successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/tasks/{task_id}")
+def update_task(task_id: int, payload: TaskUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        for key, value in payload.dict(exclude_unset=True).items():
+            if key == "due_date" and value:
+                try:
+                    task.due_date = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            elif hasattr(task, key):
+                setattr(task, key, value)
+                
+        db.commit()
+        return {"message": "Task updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(task_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        db.delete(task)
+        db.commit()
+        return {"message": "Task deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# --- Notes ---
+@app.post("/api/notes")
+def create_note(payload: NoteCreate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        new_note = Note(
+            startup_id=payload.startup_id,
+            founder_id=payload.founder_id,
+            author=payload.author or "Sarah Jenkins",
+            content=payload.content,
+            note_type=payload.note_type or "manual",
+            source=payload.source or "web",
+            tags=payload.tags or []
+        )
+        db.add(new_note)
+        db.commit()
+        db.refresh(new_note)
+        return {"id": new_note.id, "message": "Note created successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/notes/{note_id}")
+def update_note(note_id: int, payload: NoteUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        note = db.query(Note).filter(Note.id == note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+        
+        for key, value in payload.dict(exclude_unset=True).items():
+            if hasattr(note, key):
+                setattr(note, key, value)
+                
+        db.commit()
+        return {"message": "Note updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/notes/{note_id}")
+def delete_note(note_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        note = db.query(Note).filter(Note.id == note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+        
+        db.delete(note)
+        db.commit()
+        return {"message": "Note deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# --- Founders ---
+@app.get("/api/founders")
+def get_founders(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        founders = db.query(Founder).all()
+        results = []
+        for f in founders:
+            startup = db.query(Startup).filter(Startup.id == f.startup_id).first()
+            results.append({
+                "id": f.id,
+                "name": f.name,
+                "email": f.email,
+                "linkedin": f.linkedin,
+                "twitter": f.twitter,
+                "title": f.title,
+                "background": f.background,
+                "previous_companies": f.previous_companies,
+                "education": f.education,
+                "trust_score": f.trust_score,
+                "responsiveness_score": f.responsiveness_score,
+                "execution_score": f.execution_score,
+                "startup_id": f.startup_id,
+                "startup_name": startup.name if startup else "Unknown"
+            })
+        return results
+    finally:
+        db.close()
+
+@app.post("/api/founders")
+def create_founder(payload: FounderCreate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        new_founder = Founder(
+            name=payload.name,
+            email=payload.email,
+            title=payload.title,
+            background=payload.background,
+            startup_id=payload.startup_id
+        )
+        db.add(new_founder)
+        db.commit()
+        db.refresh(new_founder)
+        return {"id": new_founder.id, "message": "Founder created successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/founders/{founder_id}")
+def update_founder(founder_id: int, payload: FounderUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        founder = db.query(Founder).filter(Founder.id == founder_id).first()
+        if not founder:
+            raise HTTPException(status_code=404, detail="Founder not found")
+        
+        for key, value in payload.dict(exclude_unset=True).items():
+            if hasattr(founder, key):
+                setattr(founder, key, value)
+                
+        db.commit()
+        return {"message": "Founder updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/founders/{founder_id}")
+def delete_founder(founder_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        founder = db.query(Founder).filter(Founder.id == founder_id).first()
+        if not founder:
+            raise HTTPException(status_code=404, detail="Founder not found")
+        
+        db.delete(founder)
+        db.commit()
+        return {"message": "Founder deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# --- Portfolio (Risks/Runway) ---
+@app.get("/api/portfolio")
+def get_portfolio(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        portcos = db.query(Portfolio).all()
+        events = db.query(MonitoringEvent).order_by(MonitoringEvent.detected_at.desc()).all()
+        
+        portco_list = []
+        for p in portcos:
+            startup = db.query(Startup).filter(Startup.id == p.startup_id).first()
+            portco_list.append({
+                "id": p.id,
+                "startup_id": p.startup_id,
+                "startup_name": startup.name if startup else "Unknown",
+                "current_valuation": p.current_valuation,
+                "current_ownership": p.current_ownership,
+                "runway_months": p.runway_months,
+                "burn_rate": p.burn_rate,
+                "risk_level": p.risk_level,
+                "last_update": p.last_update_date.isoformat() if p.last_update_date else None
+            })
+            
+        event_list = []
+        for ev in events:
+            startup = db.query(Startup).filter(Startup.id == ev.startup_id).first()
+            event_list.append({
+                "id": ev.id,
+                "startup_id": ev.startup_id,
+                "startup_name": startup.name if startup else "Unknown",
+                "event_type": ev.event_type,
+                "event_data": ev.event_data,
+                "ai_summary": ev.ai_summary,
+                "importance_score": ev.importance_score,
+                "detected_at": ev.detected_at.isoformat() if ev.detected_at else None
+            })
+            
+        return {
+            "portfolio": portco_list,
+            "alerts": event_list
+        }
+    finally:
+        db.close()
+
+@app.post("/api/portfolio")
+def create_portfolio(payload: PortfolioCreate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        new_portco = Portfolio(
+            startup_id=payload.startup_id,
+            current_valuation=payload.current_valuation,
+            current_ownership=payload.current_ownership,
+            runway_months=payload.runway_months,
+            burn_rate=payload.burn_rate,
+            risk_level=payload.risk_level,
+            last_update_date=datetime.utcnow()
+        )
+        db.add(new_portco)
+        db.commit()
+        db.refresh(new_portco)
+        return {"id": new_portco.id, "message": "Portfolio entry created"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/portfolio/{portfolio_id}")
+def update_portfolio(portfolio_id: int, payload: PortfolioUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        portco = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if not portco:
+            raise HTTPException(status_code=404, detail="Portfolio entry not found")
+        for key, value in payload.dict(exclude_unset=True).items():
+            if hasattr(portco, key):
+                setattr(portco, key, value)
+        portco.last_update_date = datetime.utcnow()
+        db.commit()
+        return {"message": "Portfolio updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/portfolio/{portfolio_id}")
+def delete_portfolio(portfolio_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        portco = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if not portco:
+            raise HTTPException(status_code=404, detail="Portfolio entry not found")
+        db.delete(portco)
+        db.commit()
+        return {"message": "Portfolio deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/outreach/{outreach_id}")
+def update_outreach(outreach_id: int, payload: OutreachUpdateStatus, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        outreach = db.query(OutreachEmail).filter(OutreachEmail.id == outreach_id).first()
+        if not outreach:
+            raise HTTPException(status_code=404, detail="Outreach not found")
+        
+        if payload.status == "opened":
+            outreach.opened_at = datetime.utcnow()
+        elif payload.status == "replied":
+            outreach.replied_at = datetime.utcnow()
+            
+        db.commit()
+        return {"message": "Outreach updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/outreach/{outreach_id}")
+def delete_outreach(outreach_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        outreach = db.query(OutreachEmail).filter(OutreachEmail.id == outreach_id).first()
+        if not outreach:
+            raise HTTPException(status_code=404, detail="Outreach not found")
+        db.delete(outreach)
+        db.commit()
+        return {"message": "Outreach deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# --- Network Graph Nodes & Edges ---
+@app.get("/api/graph-data")
+def get_graph_data(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startups = db.query(Startup).all()
+        founders = db.query(Founder).all()
+        
+        nodes = []
+        edges = []
+        
+        # Core VC firm node
+        nodes.append({
+            "id": "sr_capital",
+            "label": "SR Capital",
+            "type": "firm",
+            "color": "#818CF8",
+            "size": 25
+        })
+        
+        for s in startups:
+            nodes.append({
+                "id": f"startup_{s.id}",
+                "label": s.name,
+                "type": "startup",
+                "color": "#38BDF8",
+                "size": 18
+            })
+            
+            # Link from VC to startup if invested or under IC review
+            if s.pipeline_stage in ["Invested", "Portfolio Monitoring", "IC Review"]:
+                edges.append({
+                    "source": "sr_capital",
+                    "target": f"startup_{s.id}",
+                    "label": "Invested" if s.pipeline_stage != "IC Review" else "IC Review",
+                    "color": "#10B981" if s.pipeline_stage != "IC Review" else "#818CF8"
+                })
+                
+        for f in founders:
+            nodes.append({
+                "id": f"founder_{f.id}",
+                "label": f.name,
+                "type": "founder",
+                "color": "#10B981",
+                "size": 14
+            })
+            
+            # Link from founder to their startup
+            edges.append({
+                "source": f"founder_{f.id}",
+                "target": f"startup_{f.startup_id}",
+                "label": f.title,
+                "color": "#475569"
+            })
+            
+            # Co-investor mock references in background
+            if f.previous_companies:
+                for company in f.previous_companies:
+                    node_id = f"prev_{company.lower().replace(' ', '_')}"
+                    # Add node if not exists
+                    if not any(n["id"] == node_id for n in nodes):
+                        nodes.append({
+                            "id": node_id,
+                            "label": company,
+                            "type": "legacy",
+                            "color": "#475569",
+                            "size": 10
+                        })
+                    edges.append({
+                        "source": f"founder_{f.id}",
+                        "target": node_id,
+                        "label": "Alumni",
+                        "color": "#1E293B"
+                    })
+                    
+        return {"nodes": nodes, "edges": edges}
+    finally:
+        db.close()
+
+# --- Comps Engine ---
+@app.get("/api/comps")
+def get_comps(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startups = db.query(Startup).all()
+        results = []
+        
+        # Base multiples mock/market benchmarks
+        benchmarks = {
+            "AI / ML": {"arr_multiple": "24.5x", "rule_of_40": "65%"},
+            "Enterprise SaaS": {"arr_multiple": "8.4x", "rule_of_40": "42%"},
+            "FinTech": {"arr_multiple": "6.8x", "rule_of_40": "35%"},
+            "DevTools / Infra": {"arr_multiple": "14.2x", "rule_of_40": "55%"},
+            "HealthTech": {"arr_multiple": "7.5x", "rule_of_40": "38%"},
+        }
+        
+        for s in startups:
+            # Calculate mock revenue numbers if string is range
+            revenue_str = s.revenue_arr
+            multiple_info = benchmarks.get(s.sector, {"arr_multiple": "8.0x", "rule_of_40": "40%"})
+            
+            results.append({
+                "id": s.id,
+                "name": s.name,
+                "sector": s.sector,
+                "stage": s.stage,
+                "arr": revenue_str,
+                "growth": s.revenue_growth_pct,
+                "implied_valuation": s.valuation,
+                "multiple": multiple_info["arr_multiple"],
+                "rule_of_40": multiple_info["rule_of_40"],
+                "verdict": s.investment_verdict or "HOLD"
+            })
+        return results
+    finally:
+        db.close()
+
+# --- IC Memo Generator ---
+@app.post("/api/generate-memo")
+def generate_memo(payload: MemoGenerateRequest, current_user: User = Depends(get_current_user)):
+    startup_name = payload.startup_name
+    
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.name == startup_name).first()
+        score = db.query(Score).filter(Score.startup_id == startup.id).first() if startup else None
+    finally:
+        db.close()
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "your_gemini_api_key_here":
+        return {
+            "memo_markdown": f"# Investment Committee Memo: {startup_name}\\n\\n## Executive Summary\\n{startup.description if startup else 'N/A'}\\n\\n## Verdict\\n{startup.investment_verdict if startup else 'HOLD'}\\n\\n*(Mocked response. Configure GEMINI_API_KEY for dynamic memos)*"
+        }
+        
+    try:
+        client = genai.Client(api_key=api_key)
+        
+        prompt = f"""
+        You are a Partner at a top-tier Venture Capital firm.
+        Write a highly professional, brutally honest Investment Committee (IC) Memo in Markdown format for the startup: {startup_name}.
+        
+        Available context:
+        - Sector: {startup.sector if startup else 'N/A'}
+        - Description: {startup.description if startup else 'N/A'}
+        - Problem: {startup.problem if startup else 'N/A'}
+        - Solution: {startup.solution if startup else 'N/A'}
+        - ARR: {startup.revenue_arr if startup else 'N/A'}
+        - AI Verdict: {score.verdict if score else 'N/A'}
+        
+        Format the memo cleanly with headers:
+        # Investment Committee Memo: [Company]
+        ## Executive Summary
+        ## The Market & Problem
+        ## The Solution & Moat
+        ## Traction & Economics
+        ## Key Risks (Red Flags)
+        ## Final Verdict
+        
+        Return ONLY a JSON object:
+        {{
+           "memo_markdown": "the raw markdown string..."
+        }}
+        """
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        parsed = parse_gemini_json(response.text)
+        if parsed:
+            return parsed
+        raise ValueError("JSON parse failed")
+    except Exception as e:
+        print(f"Memo gen error: {e}")
+        return {"memo_markdown": f"# Error Generating Memo\\n\\nSystem encountered an error: {str(e)}"}
+
+# --- Smart Loading Endpoints for Rich Startup Profile ---
+
+@app.get("/api/startups/{startup_id}/core")
+def get_startup_core(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        score = db.query(Score).filter(Score.startup_id == startup_id).first()
+        
+        if not startup:
+            raise HTTPException(status_code=404, detail="Startup not found")
+            
+        result = {
+            "id": startup.id,
+            "name": startup.name,
+            "sector": startup.sector,
+            "stage": startup.stage,
+            "location": startup.location,
+            "website": startup.website,
+            "founded_year": startup.founded_year,
+            "description": startup.description,
+            "pipeline_stage": startup.pipeline_stage,
+            "ai_score": score.total_score if score else startup.ai_score,
+            "investment_verdict": startup.investment_verdict,
+            "last_interaction_at": startup.last_interaction_at.isoformat() if startup.last_interaction_at else None
+        }
+        return result
+    finally:
+        db.close()
+
+def scrape_startup_info_task(startup_id: int):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        if not startup:
+            return
+            
+        print(f"[SCRAPER] Starting background enrichment for {startup.name}")
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            print("[SCRAPER] No GROQ_API_KEY found, using default fallback enrichment.")
+            founder_exists = db.query(Founder).filter(Founder.startup_id == startup_id).first()
+            if not founder_exists:
+                new_founder = Founder(
+                    startup_id=startup_id,
+                    name=f"Alex Rivera",
+                    email=f"alex@{startup.name.lower().replace(' ', '')}.com",
+                    title="CEO & Founder",
+                    background="Ex-Stripe Senior Engineer. Stanford CS.",
+                    previous_companies=["Stripe"],
+                    education="Stanford University",
+                    trust_score=85,
+                    responsiveness_score=90,
+                    execution_score=88
+                )
+                db.add(new_founder)
+                
+            if not startup.description:
+                startup.description = f"Developing next-generation solutions for {startup.sector or 'enterprise SaaS'} focusing on efficiency and scale."
+            if not startup.location:
+                startup.location = "San Francisco, CA"
+            if not startup.website:
+                startup.website = f"https://www.{startup.name.lower().replace(' ', '')}.com"
+                
+            db.commit()
+            return
+            
+        client = Groq(api_key=api_key)
+        prompt = f"""
+        You are a Venture Capital Intelligence Scraper.
+        We have just added a new startup: "{startup.name}" in sector "{startup.sector or 'Unspecified'}".
+        Find or generate realistic high-conviction tech intelligence about this company and its founders.
+        
+        Respond ONLY with a valid JSON object matching this schema, no other text:
+        {{
+          "description": "2-3 sentences explaining their product and technology.",
+          "location": "City, State or Country (e.g. San Francisco, CA)",
+          "website": "www.domain.com",
+          "founder": {{
+            "name": "Founder Full Name",
+            "title": "Founder Title (e.g. CEO & Founder)",
+            "email": "founder@domain.com",
+            "background": "pedigree education and previous companies",
+            "linkedin": "https://linkedin.com/in/username",
+            "previous_companies": ["Company1", "Company2"]
+          }}
+        }}
+        """
+        
+        response = client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.2
+        )
+        data = json.loads(response.choices[0].message.content)
+        
+        if data:
+            if not startup.description and data.get("description"):
+                startup.description = data.get("description")
+            if not startup.location and data.get("location"):
+                startup.location = data.get("location")
+            if not startup.website and data.get("website"):
+                startup.website = data.get("website")
+                
+            f_data = data.get("founder", {})
+            if f_data and f_data.get("name"):
+                founder_exists = db.query(Founder).filter(Founder.startup_id == startup_id).first()
+                if not founder_exists:
+                    new_founder = Founder(
+                        startup_id=startup_id,
+                        name=f_data.get("name"),
+                        email=f_data.get("email", ""),
+                        linkedin=f_data.get("linkedin", ""),
+                        title=f_data.get("title", "CEO & Founder"),
+                        background=f_data.get("background", ""),
+                        previous_companies=f_data.get("previous_companies", []),
+                        trust_score=85,
+                        responsiveness_score=85,
+                        execution_score=85
+                    )
+                    db.add(new_founder)
+            db.commit()
+            print(f"[SCRAPER] Successfully enriched {startup.name}")
+    except Exception as e:
+        db.rollback()
+        print(f"[SCRAPER] Error enriching startup: {e}")
+    finally:
+        db.close()
+
+@app.post("/api/startups")
+def create_startup(payload: StartupCreate, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        new_startup = Startup(
+            name=payload.name,
+            sector=payload.sector,
+            stage=payload.stage,
+            website=payload.website,
+            location=payload.location,
+            description=payload.description,
+            revenue_arr=payload.revenue_arr,
+            valuation=payload.valuation,
+            pipeline_stage=payload.pipeline_stage
+        )
+        db.add(new_startup)
+        db.commit()
+        db.refresh(new_startup)
+        
+        # Trigger background enrichment scraping
+        background_tasks.add_task(scrape_startup_info_task, new_startup.id)
+        
+        return {"id": new_startup.id, "message": "Startup created successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/startups/{startup_id}")
+def update_startup(startup_id: int, payload: StartupUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        if not startup:
+            raise HTTPException(status_code=404, detail="Startup not found")
+            
+        for key, value in payload.dict(exclude_unset=True).items():
+            if hasattr(startup, key):
+                setattr(startup, key, value)
+                
+        db.commit()
+        return {"message": "Startup updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/startups/{startup_id}")
+def delete_startup(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        if not startup:
+            raise HTTPException(status_code=404, detail="Startup not found")
+        
+        # We should ideally delete associated notes, tasks, meetings, etc.
+        # But SQLite with SQLAlchemy can handle cascades if configured, 
+        # or we just manually delete relations for safety.
+        db.query(Task).filter(Task.startup_id == startup_id).delete()
+        db.query(Meeting).filter(Meeting.startup_id == startup_id).delete()
+        db.query(Portfolio).filter(Portfolio.startup_id == startup_id).delete()
+        db.query(Score).filter(Score.startup_id == startup_id).delete()
+        db.query(MonitoringEvent).filter(MonitoringEvent.startup_id == startup_id).delete()
+        
+        db.delete(startup)
+        db.commit()
+        return {"message": "Startup and associated data deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/startups/{startup_id}/founders")
+def get_startup_founders(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        founders = db.query(Founder).filter(Founder.startup_id == startup_id).all()
+        results = [{
+            "id": f.id,
+            "name": f.name,
+            "title": f.title,
+            "email": f.email,
+            "linkedin": f.linkedin,
+            "trust_score": f.trust_score,
+            "responsiveness_score": f.responsiveness_score,
+            "background": f.background,
+            "previous_companies": f.previous_companies
+        } for f in founders]
+        return results
+    finally:
+        db.close()
+
+@app.get("/api/startups/{startup_id}/metrics")
+def get_startup_metrics(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        portfolio = db.query(Portfolio).filter(Portfolio.startup_id == startup_id).first()
+        
+        result = {
+            "revenue_arr": startup.revenue_arr if startup else "N/A",
+            "revenue_growth_pct": startup.revenue_growth_pct if startup else "N/A",
+            "valuation": startup.valuation if startup else "N/A",
+            "runway_months": portfolio.runway_months if portfolio else "N/A",
+            "burn_rate": portfolio.burn_rate if portfolio else "N/A",
+            "current_ownership": portfolio.current_ownership if portfolio else 0.0,
+            "risk_level": portfolio.risk_level if portfolio else "UNKNOWN"
+        }
+        return result
+    finally:
+        db.close()
+
+@app.get("/api/startups/{startup_id}/tasks")
+def get_startup_tasks(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        tasks = db.query(Task).filter(Task.startup_id == startup_id).all()
+        results = [{
+            "id": t.id,
+            "title": t.title,
+            "assignee": t.assignee,
+            "status": t.status,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None
+        } for t in tasks]
+        
+        # Mocking a default task if none exist for demonstration of the operational panel
+        if not results:
+            results = [
+                {"id": "mock1", "title": "Review AI IC Memo", "assignee": "Sarah J.", "status": "Pending", "priority": "High", "due_date": None},
+                {"id": "mock2", "title": "Request updated Cap Table", "assignee": "Analyst", "status": "Waiting on Founder", "priority": "Medium", "due_date": None}
+            ]
+            
+        return results
+    finally:
+        db.close()
+
+@app.get("/api/startups/{startup_id}/history")
+def get_startup_history(startup_id: int, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        # get meetings, outreach, monitoring, and notes, sort chronologically
+        meetings = db.query(Meeting).filter(Meeting.startup_id == startup_id).all()
+        outreach = db.query(OutreachEmail).filter(OutreachEmail.startup_id == startup_id).all()
+        monitoring = db.query(MonitoringEvent).filter(MonitoringEvent.startup_id == startup_id).all()
+        notes = db.query(Note).filter(Note.startup_id == startup_id).all()
+        
+        history = []
+        
+        for m in meetings:
+            history.append({
+                "type": "meeting",
+                "id": m.id,
+                "title": m.meeting_type,
+                "summary": m.ai_summary,
+                "date": m.scheduled_at.isoformat() if m.scheduled_at else None,
+                "transcript": m.raw_transcript
+            })
+            
+        for o in outreach:
+            history.append({
+                "type": "outreach",
+                "id": o.id,
+                "title": f"Email: {o.subject}",
+                "summary": f"Sent via {o.template_type} template. Opened: {bool(o.opened_at)}. Replied: {bool(o.replied_at)}",
+                "date": o.sent_at.isoformat() if o.sent_at else None,
+                "transcript": o.body
+            })
+            
+        for ev in monitoring:
+            history.append({
+                "type": "event",
+                "id": ev.id,
+                "title": ev.event_type,
+                "summary": ev.ai_summary,
+                "date": ev.detected_at.isoformat() if ev.detected_at else None,
+                "transcript": None
+            })
+            
+        for n in notes:
+            history.append({
+                "type": "note",
+                "id": n.id,
+                "title": f"Note: {n.note_type.capitalize()}",
+                "summary": n.content,
+                "date": n.created_at.isoformat() if n.created_at else None,
+                "transcript": None
+            })
+        
+        # Sort history by date descending
+        history.sort(key=lambda x: x["date"] or "", reverse=True)
+        
+        return history
+    finally:
+        db.close()
+
+@app.post("/api/startups/{startup_id}/pipeline")
+def update_startup_pipeline(startup_id: int, payload: PipelineUpdate, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == startup_id).first()
+        if not startup:
+            raise HTTPException(status_code=404, detail="Startup not found")
+            
+        new_stage = payload.stage
+        if new_stage:
+            old_stage = startup.pipeline_stage
+            startup.pipeline_stage = new_stage
+            
+            # Log this as a monitoring event (activity log)
+            event = MonitoringEvent(
+                startup_id=startup.id,
+                event_type="Pipeline Transition",
+                event_data={"old_stage": old_stage, "new_stage": new_stage},
+                ai_summary=f"Startup moved from {old_stage} to {new_stage}.",
+                importance_score=80
+            )
+            db.add(event)
+            db.commit()
+            return {"message": "Pipeline updated", "stage": new_stage}
+        return {"message": "No stage provided"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
