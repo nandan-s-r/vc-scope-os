@@ -132,3 +132,4 @@ VC Scope OS is designed to be deployed locally or in a private cloud. Meeting tr
 
 ---
 *Built for the next generation of venture capital.*
+
