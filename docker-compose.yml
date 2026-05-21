@@ -29,3 +29,4 @@ services:
       - /app/.next
     depends_on:
       - backend
+
