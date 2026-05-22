@@ -19,3 +19,4 @@ EXPOSE 8000
 
 # Command to run the server
 CMD ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
