@@ -26,3 +26,4 @@ First off, thank you for considering contributing to VC Scope OS. It's people li
 - **TypeScript**: ESLint standards provided in the frontend directory
 
 We look forward to your contributions!
+
