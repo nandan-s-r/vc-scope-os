@@ -23,3 +23,4 @@ def render():
     with col2:
         st.markdown("### Signal Sources")
         st.markdown("- GitHub Trending (Infra)\n- LinkedIn Jobs (Hiring Velocity)\n- YC S24 Batch\n- TechCrunch India")
+
