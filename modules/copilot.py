@@ -22,3 +22,4 @@ def render():
                 response = call_groq(prompt, inject_memory=True)
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
