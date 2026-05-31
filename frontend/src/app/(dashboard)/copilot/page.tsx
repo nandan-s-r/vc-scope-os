@@ -40,7 +40,10 @@ export default function LiveCopilot() {
   const autoTimerRef    = useRef<any>(null);
   const clockRef        = useRef<any>(null);
   const transcriptRef   = useRef(transcript);
-  transcriptRef.current = transcript;
+
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
 
   // ── Clock ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -79,17 +82,6 @@ export default function LiveCopilot() {
     recognitionRef.current = rec;
   }, []);
 
-  // ── Auto-analyze every 15s ─────────────────────────────────────────────────
-  useEffect(() => {
-    clearInterval(autoTimerRef.current);
-    if (autoAnalyze) {
-      autoTimerRef.current = setInterval(() => {
-        if (transcriptRef.current.trim().length > 30) runAnalysis();
-      }, 15000);
-    }
-    return () => clearInterval(autoTimerRef.current);
-  }, [autoAnalyze]);
-
   const startMic = () => { try { recognitionRef.current?.start(); } catch {} };
   const stopMic  = () => recognitionRef.current?.stop();
 
@@ -111,6 +103,17 @@ export default function LiveCopilot() {
       setLoading(false);
     }
   };
+
+  // ── Auto-analyze every 15s ─────────────────────────────────────────────────
+  useEffect(() => {
+    clearInterval(autoTimerRef.current);
+    if (autoAnalyze) {
+      autoTimerRef.current = setInterval(() => {
+        if (transcriptRef.current.trim().length > 30) runAnalysis();
+      }, 15000);
+    }
+    return () => clearInterval(autoTimerRef.current);
+  }, [autoAnalyze]);
 
   const saveMeeting = () => {
     setToast('Meeting saved successfully ✓');

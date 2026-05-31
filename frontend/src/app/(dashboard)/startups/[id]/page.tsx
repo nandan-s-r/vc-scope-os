@@ -59,30 +59,30 @@ export default function StartupProfile() {
   const [editingFounder, setEditingFounder] = useState<any | null>(null);
   const [founderForm, setFounderForm] = useState({ name: "", title: "", email: "", background: "", linkedin: "" });
 
-  const fetchAllData = async () => {
-    if (!id) return;
-    try {
-      const coreData = await apiFetch(`/api/startups/${id}/core`);
-      if (coreData) setCore(coreData);
-
-      const taskData = await apiFetch(`/api/startups/${id}/tasks`);
-      if (taskData) setTasks(taskData);
-
-      const metricsData = await apiFetch(`/api/startups/${id}/metrics`);
-      if (metricsData) setMetrics(metricsData);
-
-      const historyData = await apiFetch(`/api/startups/${id}/history`);
-      if (historyData) setHistory(historyData);
-
-      const founderData = await apiFetch(`/api/startups/${id}/founders`);
-      if (founderData) setFounders(founderData);
-    } catch (e) {
-      console.error("Error fetching data", e);
-    }
-  };
-
   useEffect(() => {
     if (!id) return;
+    
+    const fetchAllData = async () => {
+      try {
+        const coreData = await apiFetch(`/api/startups/${id}/core`);
+        if (coreData) setCore(coreData);
+
+        const taskData = await apiFetch(`/api/startups/${id}/tasks`);
+        if (taskData) setTasks(taskData);
+
+        const metricsData = await apiFetch(`/api/startups/${id}/metrics`);
+        if (metricsData) setMetrics(metricsData);
+
+        const historyData = await apiFetch(`/api/startups/${id}/history`);
+        if (historyData) setHistory(historyData);
+
+        const founderData = await apiFetch(`/api/startups/${id}/founders`);
+        if (founderData) setFounders(founderData);
+      } catch (e) {
+        console.error("Error fetching data", e);
+      }
+    };
+
     setLoading(true);
     fetchAllData().finally(() => setLoading(false));
   }, [id]);

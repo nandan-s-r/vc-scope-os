@@ -1,7 +1,6 @@
 from database.db import engine
 from database.models import Base
-# Import all models so they are registered with Base
-from database.models import *
+# Models are registered when Base is imported from models.py
 
 def init_db():
     print("Initializing Database Schema...")

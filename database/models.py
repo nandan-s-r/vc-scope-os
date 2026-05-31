@@ -62,6 +62,8 @@ class Startup(Base):
     deals = relationship("Deal", back_populates="startup")
     portfolio = relationship("Portfolio", back_populates="startup", uselist=False)
     monitoring_events = relationship("MonitoringEvent", back_populates="startup")
+    whatsapp_messages = relationship("WhatsappMessage", back_populates="startup")
+    outreach_emails = relationship("OutreachEmail", back_populates="startup")
 
 class Founder(Base):
     __tablename__ = 'founders'
@@ -81,6 +83,7 @@ class Founder(Base):
     notes = Column(Text)
     
     startup = relationship("Startup", back_populates="founders")
+    outreach_emails = relationship("OutreachEmail", back_populates="founder")
 
 class Meeting(Base):
     __tablename__ = 'meetings'
@@ -198,6 +201,8 @@ class WhatsappMessage(Base):
     intent_detected = Column(String)
     startup_id_linked = Column(Integer, ForeignKey('startups.id'), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    startup = relationship("Startup", back_populates="whatsapp_messages")
 
 class SourcingLead(Base):
     __tablename__ = 'sourcing_leads'
@@ -215,6 +220,9 @@ class OutreachEmail(Base):
     id = Column(Integer, primary_key=True)
     startup_id = Column(Integer, ForeignKey('startups.id'), nullable=True)
     founder_id = Column(Integer, ForeignKey('founders.id'), nullable=True)
+    
+    startup = relationship("Startup", back_populates="outreach_emails")
+    founder = relationship("Founder", back_populates="outreach_emails")
     template_type = Column(String)
     subject = Column(String)
     body = Column(Text)

@@ -201,8 +201,6 @@ class UserCreate(BaseModel):
     password: str
     full_name: str
 
-from database.db import SessionLocal, get_db
-
 # Security Rate Limiting & Password Validation
 login_signup_rate_limit_data = defaultdict(list)
 
@@ -316,7 +314,6 @@ async def upload_deck(file: UploadFile = File(...)):
         print("[PDF] Converting PDF to Images via PyMuPDF...")
         doc = fitz.open(stream=contents, filetype="pdf")
         
-        vision_messages = []
         prompt = """
         You are a top-tier Venture Capital Partner at Palantir Foundry.
         Analyze these pitch deck slides. Extract the exact numbers from the charts and tables.
@@ -374,7 +371,7 @@ async def upload_deck(file: UploadFile = File(...)):
         if len(vision_content) == 1:
             raise HTTPException(status_code=400, detail="No readable slides found in PDF.")
 
-        print(f"[GROQ] Sending slides to Groq Vision...")
+        print("[GROQ] Sending slides to Groq Vision...")
         
         response = client.chat.completions.create(
             model='llama-3.2-11b-vision-preview',
@@ -629,7 +626,6 @@ def generate_outreach(payload: OutreachGenerateRequest, current_user: User = Dep
     db = SessionLocal()
     try:
         startup = db.query(Startup).filter(Startup.name == startup_name).first()
-        founder = db.query(Founder).filter(Founder.name == founder_name).first() if founder_name else None
         
         desc = startup.description if startup else "an exciting AI tech startup"
         sector = startup.sector if startup else "Deep Tech"
@@ -1325,7 +1321,7 @@ def scrape_startup_info_task(startup_id: int):
             if not founder_exists:
                 new_founder = Founder(
                     startup_id=startup_id,
-                    name=f"Alex Rivera",
+                    name="Alex Rivera",
                     email=f"alex@{startup.name.lower().replace(' ', '')}.com",
                     title="CEO & Founder",
                     background="Ex-Stripe Senior Engineer. Stanford CS.",
