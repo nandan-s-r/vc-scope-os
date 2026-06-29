@@ -1,45 +1,45 @@
-# 🚀 VC Scope OS
+# VC Scope OS
 
 > **The Autonomous, AI-Powered Operating System for Modern Venture Capital Funds.** Unifying Deal Flow, CRM, Portfolio Monitoring, and Pitch Deck Intelligence into a single cohesive control center.
 
 ---
 
-### 🌐 Live Platform Access (No Install Needed)
+### Live Platform Access
 
 Anyone can instantly test and check the live deployed website:
 
-👉 **Live Web App**: **[https://vc-scope-os.vercel.app](https://vc-scope-os.vercel.app)**
-👉 **API Backend**: **[https://vc-scope-os.onrender.com](https://vc-scope-os.onrender.com)**
+*   **Live Web App**: [https://vc-scope-os.vercel.app](https://vc-scope-os.vercel.app)
+*   **API Backend**: [https://vc-scope-os.onrender.com](https://vc-scope-os.onrender.com)
 
-🔑 **Quick-Start Test Credentials**:
-*   **Email**: `test@vc.os`
-*   **Password**: `Password123!`
+**Quick-Start Test Credentials**:
+*   **Email**: test@vc.os
+*   **Password**: Password123!
 
 ---
 
-## ✨ Core Capabilities
+## Core Capabilities
 
-### 1. 🎯 Sourcing & Deal Flow CRM
+### 1. Sourcing & Deal Flow CRM
 *   **Active Pipeline Grid**: A real-time database grid tracking every company from first pitch to IC memo approval.
 *   **Outreach Terminal**: Generate highly personalized outbound emails to founders tailored by AI based on their specific sectors and thesis fit.
 *   **Founder Directory**: Track serial entrepreneurs, and monitor relationship responsiveness and founder trust scores.
 
-### 2. 🧠 evaluation & Pitch Deck Intelligence
-*   **Pitch Deck Analyzer**: Drag-and-drop PDF pitch decks to automatically parse financials, founder details, and market size into the database using **Google Gemini**.
+### 2. Evaluation & Pitch Deck Intelligence
+*   **Pitch Deck Analyzer**: Drag-and-drop PDF pitch decks to automatically parse financials, founder details, and market size into the database using Google Gemini.
 *   **Live Meeting Copilot**: Transcribe pitches in real time, extract key traction signals (ARR, CAC, LTV), flag operational risks, and get live question suggestions.
 *   **AI Scoring Moat**: A normalized scoring matrix (0-100) assessing Team, Market, and Product moats objectively.
 
-### 3. 💼 Investment Cap Table Modeler
+### 3. Investment Cap Table Modeler
 *   **Simulate Funding Rounds**: Instantly calculate pre-money/post-money valuations, dilution impact, and target ownership.
 *   **Automated IC Memo**: Automatically compile pitch deck data, meeting transcripts, and AI evaluations into a structured Investment Committee memo in seconds.
 
-### 4. 📊 Risk & Portfolio Analytics
+### 4. Risk & Portfolio Analytics
 *   **Portfolio Runway Monitor**: Track cash runways, burn rates, and MRR. Automatically flags companies with less than 6 months of runway.
 *   **Knowledge Graph**: Visualize relationships between startups, sectors, co-investors, and competitors in a dynamic node graph.
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 The platform utilizes a modern, decoupled architecture designed for speed and security:
 
@@ -51,7 +51,7 @@ The platform utilizes a modern, decoupled architecture designed for speed and se
 
 ---
 
-## 💻 Running the Project Locally
+## Running the Project Locally
 
 ### 1. Prerequisites
 *   Python 3.10+
@@ -75,7 +75,7 @@ The platform utilizes a modern, decoupled architecture designed for speed and se
    ```bash
    pip install -r requirements.txt
    ```
-4. Create your `.env` configuration file from the template.
+4. Create your .env configuration file from the template.
 5. Seed the database with mock startups:
    ```bash
    python database/seed.py
@@ -98,9 +98,9 @@ The platform utilizes a modern, decoupled architecture designed for speed and se
    ```bash
    npm run dev
    ```
-4. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+4. Open http://localhost:3000 in your browser.
 
 ---
 
-## 🔒 Security & Privacy
-VC Scope OS has built-in security headers middleware (HSTS, CSP, XSS-Protection) and secure localStorage session tokens (`vc_os_token`), making it fully compliant for secure private-cloud deployment.
+## Security & Privacy
+VC Scope OS has built-in security headers middleware (HSTS, CSP, XSS-Protection) and secure localStorage session tokens (vc_os_token), making it fully compliant for secure private-cloud deployment.
