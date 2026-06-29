@@ -12,7 +12,7 @@ Anyone can instantly test and check the live deployed website:
 👉 **API Backend**: **[https://vc-scope-os.onrender.com](https://vc-scope-os.onrender.com)**
 
 🔑 **Quick-Start Test Credentials**:
-*   **Email**: `test@vcos.ai`
+*   **Email**: `test@vc.os`
 *   **Password**: `Password123!`
 
 ---
