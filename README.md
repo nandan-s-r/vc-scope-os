@@ -8,7 +8,7 @@
 
 Anyone can instantly test and check the live deployed website:
 
-👉 **Live Web App**: **[https://frontend-66kxblurk-nandan-s-rs-projects.vercel.app](https://frontend-66kxblurk-nandan-s-rs-projects.vercel.app)**
+👉 **Live Web App**: **[https://vc-scope-os.vercel.app](https://vc-scope-os.vercel.app)**
 👉 **API Backend**: **[https://vc-scope-os.onrender.com](https://vc-scope-os.onrender.com)**
 
 🔑 **Quick-Start Test Credentials**:
