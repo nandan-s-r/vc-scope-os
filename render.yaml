@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: vc-scope-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./antigravity.db
+      - key: FRONTEND_URL
+        value: https://frontend-5eosktayo-nandan-s-rs-projects.vercel.app
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
