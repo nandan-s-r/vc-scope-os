@@ -18,7 +18,7 @@ from google import genai
 from groq import Groq
 import json
 from sqlalchemy.orm import Session
-from database.db import SessionLocal
+from database.db import SessionLocal, get_db
 from config.settings import ENVIRONMENT
 
 from database.models import Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
