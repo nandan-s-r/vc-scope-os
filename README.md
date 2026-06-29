@@ -75,8 +75,7 @@ The platform utilizes a modern, decoupled architecture designed for speed and se
    ```bash
    pip install -r requirements.txt
    ```
-4. Create your `.env` configuration:
-   * Copy `.env.example` to `.env` and fill in your API keys (`GEMINI_API_KEY`, `GROQ_API_KEY`, etc.).
+4. Create your `.env` configuration file from the template.
 5. Seed the database with mock startups:
    ```bash
    python database/seed.py
