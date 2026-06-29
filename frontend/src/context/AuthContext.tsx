@@ -51,8 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedToken = localStorage.getItem('vc_os_token');
     if (storedToken) {
       setToken(storedToken);
-      // Fetch user profile to verify token
-      fetch('http://127.0.0.1:8000/api/auth/me', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+      fetch(`${apiBase}/api/auth/me`, {
         headers: { 'Authorization': `Bearer ${storedToken}` }
       })
       .then(res => {

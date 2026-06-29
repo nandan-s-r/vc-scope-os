@@ -28,7 +28,8 @@ export default function AddStartupModal({ isOpen, onClose, onSuccess }: { isOpen
     setError('');
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/startups', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+      const res = await fetch(`${apiBase}/api/startups`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

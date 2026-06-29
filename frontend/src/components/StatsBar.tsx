@@ -18,13 +18,14 @@ export default function StatsBar() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
         const [startups, meetings, outreach, portfolio, scores, leads] = await Promise.allSettled([
-          fetch('http://127.0.0.1:8000/api/startups').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/meetings').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/outreach').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/portfolio').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/scores').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/leads').then(r => r.json()),
+          fetch(`${apiBase}/api/startups`).then(r => r.json()),
+          fetch(`${apiBase}/api/meetings`).then(r => r.json()),
+          fetch(`${apiBase}/api/outreach`).then(r => r.json()),
+          fetch(`${apiBase}/api/portfolio`).then(r => r.json()),
+          fetch(`${apiBase}/api/scores`).then(r => r.json()),
+          fetch(`${apiBase}/api/leads`).then(r => r.json()),
         ]);
 
         const scoreData = scores.status === 'fulfilled' ? scores.value : [];

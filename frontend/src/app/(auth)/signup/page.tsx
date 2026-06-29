@@ -17,7 +17,8 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/auth/signup', {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+      const res = await fetch(`${apiBase}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name: fullName }),
