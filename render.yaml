@@ -11,7 +11,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
-        value: sqlite:///./antigravity.db
+        value: sqlite:////tmp/antigravity.db
       - key: FRONTEND_URL
         value: https://vc-scope-os.vercel.app
       - key: GROQ_API_KEY
