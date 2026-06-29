@@ -96,7 +96,7 @@ export default function LiveCopilot() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript: text }),
       });
-      if (res.ok) setAnalysis(res);
+      if (res) setAnalysis(res);
     } catch (e) {
       console.error(e);
     } finally {

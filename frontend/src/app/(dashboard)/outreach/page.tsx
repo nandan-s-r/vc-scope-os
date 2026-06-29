@@ -49,8 +49,8 @@ export default function OutreachTerminal() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch('/api/founders').then(r => r.json()),
-      apiFetch('/api/outreach').then(r => r.json()),
+      apiFetch('/api/founders'),
+      apiFetch('/api/outreach'),
     ]).then(([f, o]) => {
       setFounders(f);
       setLogs(o);
@@ -77,7 +77,7 @@ export default function OutreachTerminal() {
           template_type: template,
         }),
       });
-      if (res.ok) {
+      if (res) {
         const data = res;
         setSubject(data.subject || '');
         setBody(data.body || '');

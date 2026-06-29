@@ -11,15 +11,10 @@ export default function StartupsDirectory() {
   const router = useRouter();
 
   useEffect(() => {
-    // We can fetch from /api/portfolio or /api/startups
-    // If /api/startups doesn't return a list, we'll try /api/portfolio
-    apiFetch('/api/portfolio')
+    // Fetch all startups from /api/startups to list all active pipeline assets with complete fields
+    apiFetch('/api/startups')
       .then(data => {
-        if (data.portfolio) {
-          setStartups(data.portfolio);
-        } else {
-          setStartups(data);
-        }
+        setStartups(data);
         setLoading(false);
       })
       .catch(err => {

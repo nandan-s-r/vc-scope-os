@@ -143,7 +143,6 @@ export default function PitchDeckAnalyzer() {
 
     try {
       const res = await apiFetch('/api/upload-deck', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data: DeckAnalysis = res;
 
       addLog('VISION_MODEL: EXTRACTION COMPLETE ✓', 'success');

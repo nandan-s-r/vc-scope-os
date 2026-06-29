@@ -23,7 +23,8 @@ if (typeof window !== 'undefined' && !(window as any).__fetch_intercepted) {
   const originalFetch = window.fetch;
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as any).url || '');
-    if (url.includes('127.0.0.1:8000') || url.includes('localhost:8000') || url.startsWith('/api')) {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE;
+    if (url.includes('127.0.0.1:8000') || url.includes('localhost:8000') || url.startsWith('/api') || (apiBase && url.includes(apiBase))) {
       const token = localStorage.getItem('vc_os_token');
       if (token) {
         init = init || {};

@@ -67,17 +67,14 @@ export default function Dashboard() {
   // Fetch all three in parallel using 127.0.0.1 (avoids localhost DNS issues on Windows)
   useEffect(() => {
     apiFetch('/api/portfolio')
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then(d => { setPortfolio(d); setPortfolioLoading(false); })
       .catch(e => { setPortfolioError(e.message); setPortfolioLoading(false); });
 
     apiFetch('/api/meetings')
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then(d => { setMeetings(d); setMeetingsLoading(false); })
       .catch(e => { setMeetingsError(e.message); setMeetingsLoading(false); });
 
     apiFetch('/api/outreach')
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then(d => { setOutreach(d); setOutreachLoading(false); })
       .catch(e => { setOutreachError(e.message); setOutreachLoading(false); });
   }, []);

@@ -1,4 +1,4 @@
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   // Ensure endpoint starts with a slash
@@ -9,7 +9,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   
   // Attach token if exists in localStorage
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('vc_os_token');
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
@@ -28,7 +28,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   if (response.status === 401) {
     // Handle unauthorized: clear token and redirect to login
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
+      localStorage.removeItem('vc_os_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }

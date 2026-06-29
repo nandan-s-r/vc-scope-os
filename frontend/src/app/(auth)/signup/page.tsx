@@ -92,11 +92,18 @@ export default function SignupPage() {
         </button>
       </form>
 
-      <div style={{ textAlign: 'center', marginTop: '8px' }}>
-        <span className="mono text-muted" style={{ fontSize: '12px' }}>Existing partner? </span>
-        <Link href="/login" className="mono" style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
-          Access Terminal
-        </Link>
+      <div style={{ textAlign: 'center', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div>
+          <span className="mono text-muted" style={{ fontSize: '12px' }}>Existing partner? </span>
+          <Link href="/login" className="mono" style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
+            Access Terminal
+          </Link>
+        </div>
+        <div>
+          <Link href="/privacy" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>
+            Privacy Policy
+          </Link>
+        </div>
       </div>
     </>
   );

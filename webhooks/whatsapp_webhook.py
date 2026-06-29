@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from utils.ai_utils import call_groq
+from config.settings import WHATSAPP_VERIFY_TOKEN
 
 app = FastAPI()
 
@@ -35,6 +36,12 @@ async def whatsapp_webhook(request: Request):
 async def verify_webhook(request: Request):
     """WhatsApp verification challenge."""
     params = request.query_params
-    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == "antigravity":
-        return int(params.get("hub.challenge"))
+    verify_token = WHATSAPP_VERIFY_TOKEN or "antigravity"
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == verify_token:
+        challenge = params.get("hub.challenge")
+        if challenge:
+            try:
+                return int(challenge)
+            except ValueError:
+                return challenge
     return "Verification failed"
