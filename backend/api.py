@@ -18,12 +18,14 @@ from google import genai
 from groq import Groq
 import json
 from sqlalchemy.orm import Session
-from database.db import SessionLocal, get_db
-from config.settings import ENVIRONMENT
-
-from database.models import Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
+from database.db import SessionLocal, get_db, engine
+from database.models import Base, Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
 
 app = FastAPI()
+
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
 
 # Allow Next.js frontend to call the API
 origins = [
