@@ -20,6 +20,7 @@ import json
 from sqlalchemy.orm import Session
 from database.db import SessionLocal, get_db, engine
 from database.models import Base, Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
+from config.settings import ENVIRONMENT
 
 app = FastAPI()
 
