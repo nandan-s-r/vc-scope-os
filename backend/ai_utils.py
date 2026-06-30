@@ -12,7 +12,7 @@ def call_llm(prompt: str, format_type: str = "json_object") -> str:
         try:
             client = Groq(api_key=groq_api_key)
             completion = client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 response_format={"type": format_type} if format_type == "json_object" else None

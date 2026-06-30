@@ -41,7 +41,7 @@ def run_crawlers_and_evaluate():
         if groq_api_key:
             client = Groq(api_key=groq_api_key)
             completion = client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 response_format={"type": "json_object"}
