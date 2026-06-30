@@ -578,47 +578,7 @@ def delete_meeting(meeting_id: int, current_user: User = Depends(get_current_use
         db.close()
 
 # --- Live Meeting Copilot Analysis ---
-@app.post("/api/analyze-copilot")
-def analyze_copilot(payload: CopilotAnalyzeRequest, current_user: User = Depends(get_current_user)):
-    transcript = payload.transcript
-    api_key = os.getenv("GROQ_API_KEY")
-    
-    if not api_key:
-        return {
-            "metrics": ["$2M ARR (indicated)", "3x YoY growth claims"],
-            "red_flags": ["Founder deflected question on CAC/LTV", "Engineering team retention issues mentioned"],
-            "follow_ups": ["Request audited financials", "Get cohort retention curves"],
-            "sentiment": "Neutral-Positive"
-        }
-        
-    try:
-        client = Groq(api_key=api_key)
-        prompt = f"""
-        You are a VC Copilot listening to a live founder meeting. 
-        Analyze the following transcript segment. Extract any key financial/traction metrics, list key red flags or risks, and suggest direct follow-up questions.
-        Return a JSON object only:
-        {{
-           "metrics": ["metric 1", "metric 2"],
-           "red_flags": ["flag 1", "flag 2"],
-           "follow_ups": ["question 1", "question 2"],
-           "sentiment": "Positive/Neutral/Concise"
-        }}
-        
-        Transcript:
-        {transcript}
-        """
-        response = client.chat.completions.create(
-            model='llama-3.3-70b-versatile',
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
-        parsed = parse_gemini_json(response.choices[0].message.content)
-        if parsed:
-            return parsed
-        return {"metrics": [], "red_flags": [], "follow_ups": [], "sentiment": "Error"}
-    except Exception as e:
-        print(f"Copilot error: {e}")
-        return {"metrics": [], "red_flags": [f"Analysis Error: {str(e)}"], "follow_ups": [], "sentiment": "Unknown"}
+# (Moved to end of file to use new ai_utils engine)
 
 # --- Outreach ---
 @app.get("/api/outreach")
@@ -647,56 +607,7 @@ def get_outreach(current_user: User = Depends(get_current_user)):
     finally:
         db.close()
 
-@app.post("/api/generate-outreach")
-def generate_outreach(payload: OutreachGenerateRequest, current_user: User = Depends(get_current_user)):
-    startup_name = payload.startup_name
-    founder_name = payload.founder_name
-    template_type = payload.template_type
-    
-    db = SessionLocal()
-    try:
-        startup = db.query(Startup).filter(Startup.name == startup_name).first()
-        
-        desc = startup.description if startup else "an exciting AI tech startup"
-        sector = startup.sector if startup else "Deep Tech"
-    finally:
-        db.close()
-    
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key or api_key == "your_gemini_api_key_here":
-        # Return fallback template
-        return {
-            "subject": f"{startup_name} / SR Capital",
-            "body": f"Hi {founder_name or 'there'},\n\nI was reviewing companies in the {sector} space and came across {startup_name}. I was really impressed by your focus on {desc}.\n\nWe recently closed our $450M Fund II at SR Capital and are actively looking to support high-conviction teams. Would you be open to a 15-minute intro call next week to share the vision?\n\nBest regards,\nSarah Jenkins\nPartner, SR Capital"
-        }
-        
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = f"""
-        Write a professional, personalized venture capital outreach email from Sarah Jenkins, Partner at SR Capital (recently launched $450M Fund II), to founder {founder_name or 'there'} of {startup_name}.
-        The startup is in sector {sector} and focuses on: {desc}.
-        The template type selected is: '{template_type}'.
-        Keep it direct, compelling, dense, and avoid corporate fluff or cheesy AI greetings.
-        Return ONLY a JSON object:
-        {{
-           "subject": "Email Subject",
-           "body": "Email Body"
-        }}
-        """
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        parsed = parse_gemini_json(response.text)
-        if parsed:
-            return parsed
-        raise ValueError("JSON parse failed")
-    except Exception as e:
-        print(f"Email gen error: {e}")
-        return {
-            "subject": f"{startup_name} / SR Capital",
-            "body": f"Hi {founder_name or 'there'},\n\nI wanted to reach out regarding {startup_name}. We lead seed/series A in {sector} and are inspired by what you're building.\n\nLet me know if you have 15 mins for a quick call.\n\nBest,\nSarah"
-        }
+# (generate_outreach moved to end of file to use ai_utils engine)
 
 # --- Scores ---
 @app.get("/api/scores")
