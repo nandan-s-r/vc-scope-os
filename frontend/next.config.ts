@@ -1,11 +1,13 @@
 import type { NextConfig } from "next";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE || "https://vc-scope-os.onrender.com";
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:8000/api/:path*',
+        destination: `${BACKEND_URL}/api/:path*`,
       },
     ];
   },
