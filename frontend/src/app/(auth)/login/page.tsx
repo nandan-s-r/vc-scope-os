@@ -117,10 +117,10 @@ export default function LoginPage() {
             Provision Account
           </Link>
         </div>
-        <div>
-          <Link href="/privacy" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>
-            Privacy Policy
-          </Link>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <Link href="/privacy" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Privacy</Link>
+          <Link href="/terms" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Terms</Link>
+          <Link href="/cookies" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Cookies</Link>
         </div>
       </div>
     </>

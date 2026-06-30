@@ -23,8 +23,14 @@ from database.models import Base, Startup, Founder, Meeting, Note, Score, Deck, 
 from config.settings import ENVIRONMENT
 import sourcing
 
-app = FastAPI()
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -311,9 +317,14 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 # --- Existing Upload Deck ---
 @app.post("/api/upload-deck")
 async def upload_deck(file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDFs are allowed.")
+        
     print(f"[API] Received file: {file.filename}")
     
     contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
     import base64
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
