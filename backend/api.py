@@ -1660,6 +1660,24 @@ def update_startup_pipeline(startup_id: int, payload: PipelineUpdate, current_us
     finally:
         db.close()
 
+import ai_utils
+
+@app.post("/api/analyze-copilot")
+def analyze_copilot(req: CopilotAnalyzeRequest, current_user: User = Depends(get_current_user)):
+    try:
+        result = ai_utils.analyze_copilot_transcript(req.transcript)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/generate-outreach")
+def generate_outreach(req: OutreachGenerateRequest, current_user: User = Depends(get_current_user)):
+    try:
+        result = ai_utils.generate_outreach_email(req.startup_name, req.founder_name, req.template_type)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
