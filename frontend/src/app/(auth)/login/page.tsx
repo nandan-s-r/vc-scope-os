@@ -105,7 +105,6 @@ export default function LoginPage() {
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
-          </div>
         </div>
         <div style={{ textAlign: 'right', marginTop: '-8px' }}>
           <button type="button" onClick={() => alert('Password reset is disabled in this environment. Please contact your Fund Administrator.')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} className="mono">Forgot password?</button>
