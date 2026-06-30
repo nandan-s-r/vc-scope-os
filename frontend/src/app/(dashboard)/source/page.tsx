@@ -81,7 +81,7 @@ export default function DealSourcing() {
             disabled={crawlerActive}
             style={{ 
               fontSize: '10px', 
-              color: crawlerActive ? 'var(--accent-emerald)' : 'var(--text-primary)', 
+              color: crawlerActive ? 'var(--accent-emerald)' : undefined, 
               borderColor: crawlerActive ? 'var(--accent-emerald)' : undefined,
               backgroundColor: crawlerActive ? '#111111' : undefined 
             }}
