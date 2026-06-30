@@ -23,6 +23,7 @@ export default function DealSourcing() {
   const [crawlerActive, setCrawlerActive] = useState(false);
   const [screeningId, setScreeningId]   = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen]   = useState(false);
+  const [toast, setToast]               = useState('');
 
   const refreshLeads = () => {
     apiFetch('/api/leads')
@@ -40,16 +41,23 @@ export default function DealSourcing() {
 
   const handleCrawl = async () => {
     setCrawlerActive(true);
+    setToast('');
     try {
       await apiFetch('/api/sourcing/run', { method: 'POST' });
       // Poll a few times as crawlers finish in background
       setTimeout(refreshLeads, 3000);
       setTimeout(refreshLeads, 6000);
       setTimeout(refreshLeads, 9000);
-      setTimeout(() => setCrawlerActive(false), 9000);
+      setTimeout(() => {
+        setCrawlerActive(false);
+        setToast('Crawlers completed. New leads added to queue.');
+        setTimeout(() => setToast(''), 4000);
+      }, 9000);
     } catch (e) {
       console.error(e);
       setCrawlerActive(false);
+      setToast('Crawler failed to start.');
+      setTimeout(() => setToast(''), 4000);
     }
   };
 
@@ -90,6 +98,12 @@ export default function DealSourcing() {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(34, 197, 94, 0.1)', color: 'var(--accent-emerald)', border: '1px solid var(--accent-emerald)', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }} className="mono fade-in">
+          {toast}
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
@@ -205,6 +219,8 @@ export default function DealSourcing() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           refreshLeads();
+          setToast('Manual entry saved successfully.');
+          setTimeout(() => setToast(''), 4000);
         }}
       />
 

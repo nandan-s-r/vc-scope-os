@@ -128,6 +128,10 @@ export default function ICMemoGenerator() {
             ))}
           </div>
 
+          <div style={{ marginTop: '12px', marginBottom: '12px', padding: '8px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--accent-red)', borderRadius: '4px', fontSize: '10px', color: 'var(--accent-red)', lineHeight: 1.4 }} className="mono">
+            ⚠️ WARNING: AI may hallucinate if facts are missing. Review all claims before IC submission.
+          </div>
+
           <button 
             className="btn btn-primary" 
             style={{ width: '100%', fontSize: '10px', marginTop: 'auto' }}

@@ -65,14 +65,14 @@ def analyze_copilot_transcript(transcript: str) -> dict:
             "sentiment": "Error"
         }
 
-def generate_outreach_email(startup_name: str, founder_name: str, template_type: str) -> dict:
+def generate_outreach_email(startup_name: str, founder_name: str, template_type: str, sender_name: str = "Partner", sender_firm: str = "VC Firm") -> dict:
     prompt = f"""
-    You are a Partner at a top-tier Venture Capital firm.
+    You are {sender_name}, a Partner at {sender_firm}, a top-tier Venture Capital firm.
     Write a cold outreach email to {founder_name}, founder of {startup_name}.
     Style/Template: {template_type}
     
     The email must be extremely concise, personalized, and professional. Max 4-5 sentences.
-    Do not use generic placeholders (except [My Name]). Make it sound human and high-signal.
+    Sign off the email with your real name ({sender_name}) and firm ({sender_firm}). Make it sound human and high-signal.
     
     Return ONLY a JSON object with this exact schema:
     {{
@@ -87,5 +87,5 @@ def generate_outreach_email(startup_name: str, founder_name: str, template_type:
         print(f"Error parsing Outreach JSON: {e}")
         return {
             "subject": f"Connecting regarding {startup_name}",
-            "body": f"Hi {founder_name},\n\nI was impressed by what you're building at {startup_name}. Let's chat.\n\nBest,\n[My Name]"
+            "body": f"Hi {founder_name},\n\nI was impressed by what you're building at {startup_name}. Let's chat.\n\nBest,\n{sender_name}\n{sender_firm}"
         }

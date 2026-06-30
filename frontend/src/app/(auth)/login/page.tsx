@@ -86,6 +86,7 @@ export default function LoginPage() {
             />
             <button
               type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword(!showPassword)}
               style={{
                 position: 'absolute',
@@ -104,8 +105,12 @@ export default function LoginPage() {
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
+          </div>
         </div>
-        <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '8px', padding: '12px' }}>
+        <div style={{ textAlign: 'right', marginTop: '-8px' }}>
+          <button type="button" onClick={() => alert('Password reset is disabled in this environment. Please contact your Fund Administrator.')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} className="mono">Forgot password?</button>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '4px', padding: '12px' }}>
           {loading ? 'AUTHENTICATING...' : 'ACCESS TERMINAL'}
         </button>
       </form>

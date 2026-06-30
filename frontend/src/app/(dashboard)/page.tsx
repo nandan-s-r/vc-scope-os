@@ -10,7 +10,7 @@ function LoadingSpinner() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 0' }}>
       <div style={{ width: '14px', height: '14px', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--accent-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <span className="mono text-muted" style={{ fontSize: '11px' }}>SYNCING TELEMETRY...</span>
+      <span className="mono text-muted" style={{ fontSize: '11px' }}>LOADING DATA...</span>
     </div>
   );
 }
@@ -198,8 +198,7 @@ export default function Dashboard() {
           <div className="flex-between" style={{ paddingBottom: '12px' }}>
             <h1 style={{ fontSize: '16px' }}>Intelligence Feed</h1>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn">Filter</button>
-              <button className="btn btn-primary">+ New IC Memo</button>
+              <Link href="/memo"><button className="btn btn-primary">+ New IC Memo</button></Link>
             </div>
           </div>
 
@@ -237,8 +236,8 @@ export default function Dashboard() {
               Repository gained 1,420 stars in 72 hours. Founder previously exited to Stripe. Pre-seed round opening next week.
             </p>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn">Generate Outreach</button>
-              <button className="btn">View Graph</button>
+              <Link href="/outreach"><button className="btn">Generate Outreach</button></Link>
+              <Link href="/graph"><button className="btn">View Graph</button></Link>
             </div>
           </div>
 
@@ -275,7 +274,7 @@ export default function Dashboard() {
           
           <div className="panel" style={{ background: '#090A0C', border: '1px solid var(--border-subtle)' }}>
             <div className="panel-header" style={{ marginBottom: '16px' }}>
-              System Telemetry
+              System Status
               <span className="live-dot mono" style={{ color: 'var(--accent-emerald)' }}>OK</span>
             </div>
             
@@ -285,11 +284,11 @@ export default function Dashboard() {
                 <span className="mono text-primary">12ms</span>
               </div>
               <div className="telemetry-row">
-                <span className="mono text-secondary">LLM Inference Engine</span>
+                <span className="mono text-secondary">AI Inference Engine</span>
                 <span className="mono text-primary">450ms</span>
               </div>
               <div className="telemetry-row">
-                <span className="mono text-secondary">Network Crawler Nodes</span>
+                <span className="mono text-secondary">Sourcing Agents</span>
                 <span className="mono" style={{ color: 'var(--accent-emerald)' }}>ONLINE (14)</span>
               </div>
               <div className="telemetry-row">

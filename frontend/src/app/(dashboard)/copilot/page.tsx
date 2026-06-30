@@ -115,9 +115,33 @@ export default function LiveCopilot() {
     return () => clearInterval(autoTimerRef.current);
   }, [autoAnalyze]);
 
-  const saveMeeting = () => {
-    setToast('Meeting saved successfully ✓');
-    setTimeout(() => setToast(''), 3000);
+  const saveMeeting = async () => {
+    setLoading(true);
+    try {
+      await apiFetch('/api/meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startup_id: null,
+          meeting_type: meetingName || "Live Pitch",
+          ai_summary: analysis.sentiment + " - " + analysis.metrics.join(", "),
+          duration_minutes: Math.max(1, Math.floor(elapsed / 60)),
+          raw_transcript: transcriptRef.current,
+          key_concerns: analysis.red_flags,
+          action_items: analysis.follow_ups,
+          founder_score: analysis.sentiment.includes('Positive') ? 95 : 80,
+          live_mode_used: isListening
+        })
+      });
+      setToast('Meeting saved successfully ✓');
+      setTimeout(() => setToast(''), 3000);
+    } catch (e) {
+      console.error(e);
+      setToast('Failed to save meeting.');
+      setTimeout(() => setToast(''), 3000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const sentColor = SENTIMENT_COLOR[analysis.sentiment] ?? 'var(--text-muted)';

@@ -328,3 +328,43 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary);
 }
 
+/* ── Mobile Responsiveness ── */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  
+  .sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .cmd-search {
+    width: 100%;
+  }
+
+  .top-nav {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 12px;
+    gap: 8px;
+  }
+  
+  .top-nav .cmd-search {
+    order: 2;
+    margin-top: 8px;
+  }
+
+  main > div > div[style*="display: grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stats-bar {
+    flex-wrap: wrap;
+    height: auto;
+  }
+}
+

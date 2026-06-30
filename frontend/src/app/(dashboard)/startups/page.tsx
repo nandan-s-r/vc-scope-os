@@ -4,10 +4,12 @@ import { apiFetch } from "@/lib/apiClient";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AddStartupModal from "@/components/AddStartupModal";
 
 export default function StartupsDirectory() {
   const [startups, setStartups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function StartupsDirectory() {
           <h1 style={{ fontSize: "24px", margin: 0 }}>Startups Directory</h1>
           <div className="mono" style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>ALL PIPELINE ASSETS</div>
         </div>
-        <button className="btn btn-primary">+ Add Startup</button>
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>+ Add Startup</button>
       </div>
 
       <div className="panel" style={{ padding: "0" }}>
@@ -84,6 +86,15 @@ export default function StartupsDirectory() {
           </tbody>
         </table>
       </div>
+
+      <AddStartupModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => {
+          setLoading(true);
+          apiFetch('/api/startups').then(d => { setStartups(d); setLoading(false); });
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import StatsBar from "@/components/StatsBar";
+import CommandBar from "@/components/CommandBar";
 
 export default function DashboardLayout({
   children,
@@ -13,17 +14,14 @@ export default function DashboardLayout({
       <div className="center-stage">
         {/* Top Command Bar */}
         <div className="top-nav">
-          <div className="cmd-search">
-            <span style={{ color: 'var(--accent-blue)', fontSize: '11px', fontWeight: 600 }}>[CMD]</span>
-            <input type="text" placeholder="Lookup startup, founder, or execute command (⌘K)..." />
-          </div>
+          <CommandBar />
           <div style={{ flex: 1 }}></div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            <span className="mono text-muted">SECURE CONNECTION ESTABLISHED</span>
+            <span className="mono text-muted">WORKSPACE SYNCED</span>
             <span className="mono text-muted">|</span>
             <div className="mono text-primary" style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ width: '6px', height: '6px', background: 'var(--accent-emerald)', borderRadius: '50%', marginRight: '6px' }}></span>
-              SYSTEM NOMINAL
+              ONLINE
             </div>
           </div>
         </div>

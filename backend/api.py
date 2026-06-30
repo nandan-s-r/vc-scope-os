@@ -98,7 +98,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 class MeetingCreate(BaseModel):
-    startup_id: int
+    startup_id: Optional[int] = None
     meeting_type: Optional[str] = "Initial Pitch"
     ai_summary: Optional[str] = ""
     duration_minutes: Optional[int] = 30
@@ -1209,12 +1209,14 @@ def generate_memo(payload: MemoGenerateRequest, current_user: User = Depends(get
         Write a highly professional, brutally honest Investment Committee (IC) Memo in Markdown format for the startup: {startup_name}.
         
         Available context:
-        - Sector: {startup.sector if startup else 'N/A'}
-        - Description: {startup.description if startup else 'N/A'}
-        - Problem: {startup.problem if startup else 'N/A'}
-        - Solution: {startup.solution if startup else 'N/A'}
-        - ARR: {startup.revenue_arr if startup else 'N/A'}
-        - AI Verdict: {score.verdict if score else 'N/A'}
+        - Sector: {startup.sector if startup and startup.sector else 'Unknown'}
+        - Description: {startup.description if startup and startup.description else 'Unknown'}
+        - Problem: {startup.problem if startup and startup.problem else 'Unknown'}
+        - Solution: {startup.solution if startup and startup.solution else 'Unknown'}
+        - ARR: {startup.revenue_arr if startup and startup.revenue_arr else 'Unknown'}
+        - AI Verdict: {score.verdict if score else 'Unknown'}
+        
+        CRITICAL: If any context above is "Unknown", DO NOT fabricate or invent facts. Explicitly state "Data not provided" and cite it as an information gap. Do not falsely claim they have "no problem" or "no solution".
         
         Format the memo cleanly with headers:
         # Investment Committee Memo: [Company]
@@ -1615,7 +1617,10 @@ def analyze_copilot(req: CopilotAnalyzeRequest, current_user: User = Depends(get
 @app.post("/api/generate-outreach")
 def generate_outreach(req: OutreachGenerateRequest, current_user: User = Depends(get_current_user)):
     try:
-        result = ai_utils.generate_outreach_email(req.startup_name, req.founder_name, req.template_type)
+        # Get current user name, default firm to "SR Capital" for demo (could be added to User model)
+        sender_name = current_user.full_name or "Sarah Jenkins"
+        sender_firm = "SR Capital" 
+        result = ai_utils.generate_outreach_email(req.startup_name, req.founder_name, req.template_type, sender_name, sender_firm)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

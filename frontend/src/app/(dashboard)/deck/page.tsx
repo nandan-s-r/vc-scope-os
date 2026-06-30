@@ -119,7 +119,7 @@ export default function PitchDeckAnalyzer() {
   };
 
   const processFile = async (file: File) => {
-    if (!file.name.endsWith('.pdf')) {
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
       addLog('ERROR: Only PDF files are accepted.', 'error');
       return;
     }
@@ -243,7 +243,7 @@ export default function PitchDeckAnalyzer() {
           <button className="btn btn-primary" style={{ padding: '8px 24px', fontSize: '11px', letterSpacing: '0.05em' }}>
             SELECT PITCH DECK (.PDF)
           </button>
-          <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleFileChange} />
+          <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
       )}
 
