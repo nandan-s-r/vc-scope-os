@@ -51,8 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedToken = localStorage.getItem('vc_os_token');
     if (storedToken) {
       setToken(storedToken);
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
-      fetch(`${apiBase}/api/auth/me`, {
+      // Use relative path for production proxy mapping
+      fetch('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${storedToken}` }
       })
       .then(res => {
@@ -100,9 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '12px' }}>
           SECURE PROTOCOL INITIALIZATION...
         </div>
-      ) : (
-        children
-      )}
+      ) : children}
     </AuthContext.Provider>
   );
 }

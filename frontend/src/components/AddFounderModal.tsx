@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function AddFounderModal({ isOpen, onClose, onSuccess }: { isOpen: boolean, onClose: () => void, onSuccess: () => void }) {
-  const { token } = useAuth();
   const [startups, setStartups] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -18,9 +17,7 @@ export default function AddFounderModal({ isOpen, onClose, onSuccess }: { isOpen
 
   useEffect(() => {
     if (isOpen) {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
-      fetch(`${apiBase}/api/startups`)
-        .then(res => res.json())
+      apiFetch('/api/startups')
         .then(data => setStartups(data))
         .catch(err => console.error("Failed to load startups for dropdown"));
     }
@@ -36,18 +33,10 @@ export default function AddFounderModal({ isOpen, onClose, onSuccess }: { isOpen
     setError('');
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
-      const res = await fetch(`${apiBase}/api/founders`, {
+      await apiFetch('/api/founders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify(formData)
       });
-
-      if (!res.ok) throw new Error('Failed to create founder');
-      
       onSuccess();
       onClose();
     } catch (err: any) {

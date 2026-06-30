@@ -17,8 +17,8 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
-      const res = await fetch(`${apiBase}/api/auth/signup`, {
+      // Use relative URL so the Next.js rewrite proxy handles it
+      const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name: fullName }),
@@ -98,11 +98,6 @@ export default function SignupPage() {
           <span className="mono text-muted" style={{ fontSize: '12px' }}>Existing partner? </span>
           <Link href="/login" className="mono" style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
             Access Terminal
-          </Link>
-        </div>
-        <div>
-          <Link href="/privacy" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>
-            Privacy Policy
           </Link>
         </div>
       </div>

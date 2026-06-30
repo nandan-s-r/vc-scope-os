@@ -18,14 +18,14 @@ export default function StatsBar() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+        // Use relative URLs so that the Next.js rewrites proxy them to the backend server-side
         const [startups, meetings, outreach, portfolio, scores, leads] = await Promise.allSettled([
-          fetch(`${apiBase}/api/startups`).then(r => r.json()),
-          fetch(`${apiBase}/api/meetings`).then(r => r.json()),
-          fetch(`${apiBase}/api/outreach`).then(r => r.json()),
-          fetch(`${apiBase}/api/portfolio`).then(r => r.json()),
-          fetch(`${apiBase}/api/scores`).then(r => r.json()),
-          fetch(`${apiBase}/api/leads`).then(r => r.json()),
+          fetch('/api/startups').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/meetings').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/outreach').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/portfolio').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/scores').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch('/api/leads').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
         ]);
 
         const scoreData = scores.status === 'fulfilled' ? scores.value : [];

@@ -23,8 +23,8 @@ export default function LoginPage() {
       formData.append('username', email);
       formData.append('password', password);
 
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
-      const res = await fetch(`${apiBase}/api/auth/login`, {
+      // Use relative URL so the Next.js rewrite proxy handles it
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData,
@@ -98,35 +98,28 @@ export default function LoginPage() {
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
                 fontSize: '14px',
-                padding: '4px'
               }}
-              title={showPassword ? "Hide password" : "Show password"}
             >
-              {showPassword ? '🙈' : '👁️'}
+              {showPassword ? '👁' : '👁‍🗨'}
             </button>
           </div>
         </div>
-        <div style={{ textAlign: 'right', marginTop: '-8px' }}>
-          <button type="button" onClick={() => alert('Password reset is disabled in this environment. Please contact your Fund Administrator.')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} className="mono">Forgot password?</button>
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '4px', padding: '12px' }}>
-          {loading ? 'AUTHENTICATING...' : 'ACCESS TERMINAL'}
-        </button>
-      </form>
 
-      <div style={{ textAlign: 'center', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div>
-          <span className="mono text-muted" style={{ fontSize: '12px' }}>New partner? </span>
-          <Link href="/signup" className="mono" style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
-            Provision Account
-          </Link>
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn btn-primary"
+          style={{ width: '100%', marginTop: '8px', padding: '12px' }}
+        >
+          {loading ? 'INITIALIZING SESSION...' : 'ACCESS PORTAL'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: '8px' }}>
+          <span className="mono text-muted" style={{ fontSize: '11px' }}>
+            New node? <Link href="/signup" style={{ color: 'var(--accent-blue)', textDecoration: 'underline' }}>Initialize account</Link>
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-          <Link href="/privacy" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Privacy</Link>
-          <Link href="/terms" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Terms</Link>
-          <Link href="/cookies" className="mono text-muted" style={{ fontSize: '11px', textDecoration: 'underline' }}>Cookies</Link>
-        </div>
-      </div>
+      </form>
     </>
   );
 }
