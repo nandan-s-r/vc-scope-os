@@ -34,6 +34,26 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+    
+    # --- EPHEMERAL DB RESILIENCY HACK ---
+    # Render's free tier wipes the /tmp SQLite database on every restart.
+    # To ensure the user NEVER gets locked out and can always log in, 
+    # we automatically seed an admin account into the database on startup.
+    db = SessionLocal()
+    try:
+        from backend.auth import get_password_hash
+        admin_email = "admin@sr.capital"
+        existing = db.query(User).filter(User.email == admin_email).first()
+        if not existing:
+            print(f"Seeding persistent admin user: {admin_email}")
+            hashed = get_password_hash("Password123!")
+            new_admin = User(email=admin_email, full_name="SR Admin", hashed_password=hashed)
+            db.add(new_admin)
+            db.commit()
+    except Exception as e:
+        print(f"Failed to seed admin user: {e}")
+    finally:
+        db.close()
 
 # Allow Next.js frontend to call the API
 origins = [

@@ -13,8 +13,8 @@ from database.models import User
 # Load secret key from environment or use a fallback at runtime
 jwt_secret_env = os.getenv("JWT_SECRET")
 if not jwt_secret_env:
-    SECRET_KEY = secrets.token_hex(32)
-    print("WARNING: JWT_SECRET environment variable is not set. Generated a cryptographically secure random secret key at runtime.")
+    SECRET_KEY = "vc_scope_secure_fallback_key_do_not_use_in_prod_12345"
+    print("WARNING: JWT_SECRET environment variable is not set. Using hardcoded fallback.")
 else:
     SECRET_KEY = jwt_secret_env
 ALGORITHM = "HS256"
