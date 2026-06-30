@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from database.db import SessionLocal, get_db, engine
 from database.models import Base, Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
 from config.settings import ENVIRONMENT
-import sourcing
+from backend import sourcing
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -1671,7 +1671,7 @@ def update_startup_pipeline(startup_id: int, payload: PipelineUpdate, current_us
     finally:
         db.close()
 
-import ai_utils
+from backend import ai_utils
 
 @app.post("/api/analyze-copilot")
 def analyze_copilot(req: CopilotAnalyzeRequest, current_user: User = Depends(get_current_user)):
