@@ -12,8 +12,8 @@ Anyone can instantly test and check the live deployed website:
 *   **API Backend**: [https://vc-scope-os.onrender.com](https://vc-scope-os.onrender.com)
 
 **Quick-Start Test Credentials**:
-*   **Email**: admin@sr.capital
-*   **Password**: Password123!
+*   **Demo User**: `test@vc.os` / `Password123!` (Sarah Jenkins persona)
+*   **Admin User**: `admin@sr.capital` / `Password123!`
 
 ---
 

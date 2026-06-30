@@ -42,14 +42,25 @@ def startup_event():
     db = SessionLocal()
     try:
         from backend.auth import get_password_hash
+        # Seed Admin
         admin_email = "admin@sr.capital"
-        existing = db.query(User).filter(User.email == admin_email).first()
-        if not existing:
+        existing_admin = db.query(User).filter(User.email == admin_email).first()
+        if not existing_admin:
             print(f"Seeding persistent admin user: {admin_email}")
             hashed = get_password_hash("Password123!")
             new_admin = User(email=admin_email, full_name="SR Admin", hashed_password=hashed)
             db.add(new_admin)
-            db.commit()
+
+        # Seed Demo User
+        demo_email = "test@vc.os"
+        existing_demo = db.query(User).filter(User.email == demo_email).first()
+        if not existing_demo:
+            print(f"Seeding persistent demo user: {demo_email}")
+            hashed = get_password_hash("Password123!")
+            new_demo = User(email=demo_email, full_name="Sarah Jenkins", hashed_password=hashed)
+            db.add(new_demo)
+
+        db.commit()
     except Exception as e:
         print(f"Failed to seed admin user: {e}")
     finally:
