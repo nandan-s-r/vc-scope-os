@@ -1,15 +1,17 @@
-// In production (Vercel), NEXT_PUBLIC_API_BASE is set to the Render backend URL.
-// In local dev, fall back to localhost.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+// API_BASE is intentionally empty so all /api/* calls are relative URLs.
+// On Vercel (production): Next.js rewrites /api/* → https://vc-scope-os.onrender.com/api/*
+//   — server-to-server, no CORS issues.
+// In local dev: Next.js dev server rewrites /api/* → http://127.0.0.1:8000/api/*
+//   — via BACKEND_URL in .env.local
+const API_BASE = '';
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  // Ensure endpoint starts with a slash
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${API_BASE}${path}`;
 
   const headers = new Headers(options.headers || {});
-  
-  // Attach token if exists in localStorage
+
+  // Attach JWT token if present
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('vc_os_token');
     if (token) {
@@ -17,7 +19,6 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     }
   }
 
-  // Set default content type to JSON if not provided and not a FormData request
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -28,7 +29,6 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   });
 
   if (response.status === 401) {
-    // Handle unauthorized: clear token and redirect to login
     if (typeof window !== 'undefined') {
       localStorage.removeItem('vc_os_token');
       localStorage.removeItem('user');
@@ -42,13 +42,12 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     try {
       const errorData = await response.json();
       errorMessage = errorData.detail || errorData.message || errorMessage;
-    } catch (e) {
+    } catch (_e) {
       errorMessage = await response.text();
     }
     throw new Error(errorMessage);
   }
 
-  // Handle empty responses
   if (response.status === 204) {
     return null;
   }

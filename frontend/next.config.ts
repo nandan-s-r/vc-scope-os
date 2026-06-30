@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE || "https://vc-scope-os.onrender.com";
+// BACKEND_URL is a server-side variable - safe to use in next.config.ts rewrites.
+// In production (Vercel), this defaults to the Render backend.
+// For local dev, set BACKEND_URL=http://127.0.0.1:8000 in .env.local
+const BACKEND_URL = process.env.BACKEND_URL || "https://vc-scope-os.onrender.com";
 
 const nextConfig: NextConfig = {
   async rewrites() {

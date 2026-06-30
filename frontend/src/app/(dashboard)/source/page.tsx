@@ -1,8 +1,7 @@
 'use client';
 
 import { apiFetch } from '@/lib/apiClient';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import AddStartupModal from '@/components/AddStartupModal';
 
@@ -17,53 +16,92 @@ interface Lead {
   discovered_at: string;
 }
 
+type CrawlerState = 'idle' | 'warming' | 'running' | 'done' | 'error';
+
 export default function DealSourcing() {
   const [leads, setLeads]               = useState<Lead[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [crawlerActive, setCrawlerActive] = useState(false);
-  const [screeningId, setScreeningId]   = useState<number | null>(null);
+  const [crawlerState, setCrawlerState] = useState<CrawlerState>('idle');
+  const [errorMsg, setErrorMsg]         = useState('');
   const [isModalOpen, setIsModalOpen]   = useState(false);
   const [toast, setToast]               = useState('');
+  const [convertingId, setConvertingId] = useState<number | null>(null);
 
-  const refreshLeads = () => {
+  const refreshLeads = useCallback(() => {
     apiFetch('/api/leads')
-      
-      .then(data => { setLeads(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    apiFetch('/api/leads')
-      
-      .then(data => { setLeads(data); setLoading(false); })
+      .then(data => { setLeads(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
+  useEffect(() => { refreshLeads(); }, [refreshLeads]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 5000);
+  };
+
   const handleCrawl = async () => {
-    setCrawlerActive(true);
-    setToast('');
+    if (crawlerState === 'running' || crawlerState === 'warming') return;
+
+    setCrawlerState('warming');
+    setErrorMsg('');
+
     try {
+      // POST to start crawlers — if backend is cold this may take 30-60s
       await apiFetch('/api/sourcing/run', { method: 'POST' });
-      // Poll a few times as crawlers finish in background
-      setTimeout(refreshLeads, 3000);
-      setTimeout(refreshLeads, 6000);
-      setTimeout(refreshLeads, 9000);
-      setTimeout(() => {
-        setCrawlerActive(false);
-        setToast('Crawlers completed. New leads added to queue.');
-        setTimeout(() => setToast(''), 4000);
-      }, 9000);
-    } catch (e) {
-      console.error(e);
-      setCrawlerActive(false);
-      setToast('Crawler failed to start.');
-      setTimeout(() => setToast(''), 4000);
+      setCrawlerState('running');
+
+      // Poll every 4 seconds for up to 60 seconds (15 attempts)
+      let attempts = 0;
+      const initialCount = leads.length;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const fresh = await apiFetch('/api/leads');
+          const freshLeads = Array.isArray(fresh) ? fresh : [];
+          setLeads(freshLeads);
+
+          if (freshLeads.length > initialCount || attempts >= 15) {
+            clearInterval(poll);
+            setCrawlerState('done');
+            if (freshLeads.length > initialCount) {
+              showToast(`✓ ${freshLeads.length - initialCount} new leads added to queue.`);
+            } else {
+              showToast('Crawlers finished. No new leads found (all may be duplicates).');
+            }
+          }
+        } catch (_) {
+          // Backend may briefly restart — keep polling
+        }
+      }, 4000);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Crawler failed to start';
+      setCrawlerState('error');
+      setErrorMsg(msg);
     }
   };
 
-  const handleScreen = (id: number) => {
-    setScreeningId(id);
-    setTimeout(() => setScreeningId(null), 2500);
+  const handleConvert = async (lead: Lead) => {
+    setConvertingId(lead.id);
+    try {
+      await apiFetch('/api/startups', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: lead.company_name,
+          website: lead.website,
+          description: lead.description,
+          sector: 'Unclassified',
+          stage: 'Sourced',
+          pipeline_stage: 'Sourced',
+        }),
+      });
+      showToast(`✓ "${lead.company_name}" added to Startups Database.`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Conversion failed';
+      showToast(`✗ Failed: ${msg}`);
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   const getSignalColor = (score: number) => {
@@ -72,35 +110,73 @@ export default function DealSourcing() {
     return 'var(--accent-violet)';
   };
 
+  const crawlerLabel = {
+    idle:    'RUN CRAWLERS',
+    warming: '⏳ WAKING BACKEND...',
+    running: '⟳ CRAWLERS RUNNING...',
+    done:    '✓ COMPLETED — RUN AGAIN',
+    error:   '✗ RETRY CRAWLERS',
+  }[crawlerState];
+
+  const crawlerColor = {
+    idle:    undefined,
+    warming: 'var(--accent-amber)',
+    running: 'var(--accent-emerald)',
+    done:    'var(--accent-emerald)',
+    error:   'var(--accent-red)',
+  }[crawlerState];
+
   return (
     <div style={{ padding: '12px' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes fade-in { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none;} } .fade-in { animation: fade-in 0.3s ease both; }`}</style>
+
+      {/* Header */}
       <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '14px', letterSpacing: '0' }}>Automated Deal Sourcing</h1>
-          <p className="mono text-muted" style={{ fontSize: '12px' }}>AI-driven web crawlers sourcing top 1% of founders</p>
+          <p className="mono text-muted" style={{ fontSize: '12px' }}>AI crawlers scraping customer obsession signals via LinkedIn & Twitter proxies</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={() => setIsModalOpen(true)}>
+          <button className="btn btn-secondary" id="source-manual-btn" onClick={() => setIsModalOpen(true)}>
             + MANUAL ENTRY
           </button>
           <button
+            id="source-run-crawlers-btn"
             className="btn btn-primary"
             onClick={handleCrawl}
-            disabled={crawlerActive}
-            style={{ 
-              fontSize: '10px', 
-              color: crawlerActive ? 'var(--accent-emerald)' : undefined, 
-              borderColor: crawlerActive ? 'var(--accent-emerald)' : undefined,
-              backgroundColor: crawlerActive ? '#111111' : undefined 
+            disabled={crawlerState === 'warming' || crawlerState === 'running'}
+            style={{
+              fontSize: '11px',
+              background: crawlerState === 'idle' || crawlerState === 'done' ? undefined : '#111111',
+              color: crawlerColor,
+              borderColor: crawlerColor,
             }}
           >
-            {crawlerActive ? '⟳ CRAWLERS RUNNING...' : 'RUN CRAWLERS'}
+            {crawlerLabel}
           </button>
         </div>
       </div>
 
+      {/* State banners */}
+      {crawlerState === 'warming' && (
+        <div className="mono" style={{ marginBottom: '12px', padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', fontSize: '12px', color: 'var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '10px', height: '10px', border: '2px solid var(--accent-amber)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          WAKING BACKEND... Render free tier takes 30-60 seconds to start. Please wait.
+        </div>
+      )}
+      {crawlerState === 'running' && (
+        <div className="mono" style={{ marginBottom: '12px', padding: '12px 16px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '4px', fontSize: '12px', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '10px', height: '10px', border: '2px solid var(--accent-emerald)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          CRAWLERS RUNNING — scanning LinkedIn & Twitter proxies for high-signal founders...
+        </div>
+      )}
+      {crawlerState === 'error' && (
+        <div className="mono" style={{ marginBottom: '12px', padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', fontSize: '12px', color: 'var(--accent-red)' }}>
+          ✗ CRAWLER ERROR: {errorMsg} — Click "RETRY CRAWLERS" to try again.
+        </div>
+      )}
       {toast && (
-        <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(34, 197, 94, 0.1)', color: 'var(--accent-emerald)', border: '1px solid var(--accent-emerald)', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }} className="mono fade-in">
+        <div className="mono fade-in" style={{ marginBottom: '12px', padding: '12px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '4px', fontSize: '12px', color: 'var(--accent-emerald)', textAlign: 'center' }}>
           {toast}
         </div>
       )}
@@ -111,7 +187,7 @@ export default function DealSourcing() {
           <div className="mono text-muted" style={{ fontSize: '9px' }}>GITHUB TRACKER</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '4px' }}>
             <span style={{ fontSize: '16px', fontWeight: 700 }}>{leads.length} leads tracked</span>
-            <span className="mono" style={{ color: 'var(--accent-emerald)', fontSize: '9px' }}>+12% vs Q2</span>
+            <span className="mono" style={{ color: 'var(--accent-emerald)', fontSize: '9px' }}>LIVE</span>
           </div>
         </div>
         <div className="panel" style={{ borderLeft: '2px solid var(--accent-violet)' }}>
@@ -130,11 +206,12 @@ export default function DealSourcing() {
         </div>
       </div>
 
+      {/* Leads table */}
       {loading ? (
         <div className="panel text-muted" style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
             <div style={{ width: '12px', height: '12px', border: '2px solid var(--accent-violet)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            PARSING DEEP WEB SIGNAL FEEDS...
+            LOADING LEAD DATABASE...
           </div>
         </div>
       ) : (
@@ -144,73 +221,78 @@ export default function DealSourcing() {
             <span className="mono" style={{ color: 'var(--accent-blue)', fontSize: '9px' }}>{leads.length} SIGNALS</span>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>COMPANY</th>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>SOURCE</th>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>DESCRIPTION</th>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>SIGNAL</th>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>STATUS</th>
-                <th className="mono" style={{ padding: '8px 6px', fontSize: '10px', textAlign: 'right' }}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((l) => (
-                <tr key={l.id} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td style={{ padding: '8px 6px', fontWeight: 600 }}>
-                    <a href={l.website} target="_blank" rel="noopener noreferrer"
-                      style={{ color: 'var(--accent-blue)', textDecoration: 'underline', textDecorationColor: 'transparent' }}
-                      onMouseEnter={e => (e.currentTarget.style.textDecorationColor = 'var(--accent-blue)')}
-                      onMouseLeave={e => (e.currentTarget.style.textDecorationColor = 'transparent')}
-                    >
-                      {l.company_name}
-                    </a>
-                  </td>
-                  <td style={{ padding: '8px 6px' }}>
-                    <span className="mono" style={{ fontSize: '9px', background: 'var(--bg-main)', padding: '2px 6px', border: '1px solid var(--border-subtle)' }}>
-                      {l.source}
-                    </span>
-                  </td>
-                  <td className="text-secondary" style={{ padding: '8px 6px', fontSize: '11px', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {l.description}
-                  </td>
-                  <td className="mono" style={{ padding: '8px 6px', color: getSignalColor(l.signal_score), fontWeight: 700, fontSize: '13px' }}>
-                    {l.signal_score}
-                  </td>
-                  <td style={{ padding: '8px 6px' }}>
-                    <span className="mono" style={{
-                      fontSize: '9px', padding: '2px 6px',
-                      background: l.status === 'New' ? 'rgba(56,189,248,0.08)' : 'var(--bg-main)',
-                      color: l.status === 'New' ? 'var(--accent-blue)' : l.status === 'Screening' ? 'var(--accent-amber)' : 'var(--text-secondary)',
-                      border: '1px solid var(--border-subtle)'
-                    }}>
-                      {l.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                      <Link href="/outreach">
-                        <button className="btn" style={{ fontSize: '9px', color: 'var(--accent-violet)', borderColor: 'rgba(129,140,248,0.3)' }}>
-                          OUTREACH
-                        </button>
-                      </Link>
-                      <button
-                        className="btn"
-                        style={{ fontSize: '9px', color: screeningId === l.id ? 'var(--accent-emerald)' : 'inherit', borderColor: screeningId === l.id ? 'rgba(16,185,129,0.3)' : undefined }}
-                        onClick={() => handleScreen(l.id)}
-                      >
-                        {screeningId === l.id ? '✓ QUEUED' : 'SCREEN'}
-                      </button>
-                    </div>
-                  </td>
+          {leads.length === 0 && (
+            <div className="mono text-muted" style={{ textAlign: 'center', padding: '40px 20px' }}>
+              No leads yet. Click <strong style={{ color: 'var(--accent-emerald)' }}>RUN CRAWLERS</strong> to discover top 1% founders from LinkedIn & Twitter, or use <strong>+ MANUAL ENTRY</strong>.
+            </div>
+          )}
+
+          {leads.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>COMPANY</th>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>SOURCE</th>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>DESCRIPTION</th>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>SIGNAL</th>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px' }}>STATUS</th>
+                  <th className="mono" style={{ padding: '8px 6px', fontSize: '10px', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {leads.map(l => (
+                  <tr key={l.id} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'default' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td style={{ padding: '10px 6px', fontWeight: 600 }}>
+                      <a href={l.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-blue)' }}>
+                        {l.company_name}
+                      </a>
+                    </td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <span className="mono" style={{ fontSize: '9px', background: 'var(--bg-main)', padding: '2px 6px', border: '1px solid var(--border-subtle)' }}>
+                        {l.source}
+                      </span>
+                    </td>
+                    <td className="text-secondary" style={{ padding: '10px 6px', fontSize: '11px', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {l.description}
+                    </td>
+                    <td className="mono" style={{ padding: '10px 6px', color: getSignalColor(l.signal_score), fontWeight: 700, fontSize: '13px' }}>
+                      {l.signal_score}
+                    </td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <span className="mono" style={{
+                        fontSize: '9px', padding: '2px 6px',
+                        background: l.status === 'New' ? 'rgba(56,189,248,0.08)' : 'var(--bg-main)',
+                        color: l.status === 'New' ? 'var(--accent-blue)' : l.status === 'Screening' ? 'var(--accent-amber)' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-subtle)',
+                      }}>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn"
+                          style={{ fontSize: '9px', color: 'var(--accent-emerald)', borderColor: 'rgba(16,185,129,0.3)' }}
+                          onClick={() => handleConvert(l)}
+                          disabled={convertingId === l.id}
+                          title="Convert this lead to a Startup record"
+                        >
+                          {convertingId === l.id ? '...' : '→ STARTUP'}
+                        </button>
+                        <Link href="/outreach">
+                          <button className="btn" style={{ fontSize: '9px', color: 'var(--accent-violet)', borderColor: 'rgba(129,140,248,0.3)' }}>
+                            OUTREACH
+                          </button>
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -219,12 +301,9 @@ export default function DealSourcing() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           refreshLeads();
-          setToast('Manual entry saved successfully.');
-          setTimeout(() => setToast(''), 4000);
+          showToast('Manual entry saved successfully.');
         }}
       />
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
