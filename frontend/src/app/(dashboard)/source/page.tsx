@@ -38,9 +38,19 @@ export default function DealSourcing() {
       .catch(() => setLoading(false));
   }, []);
 
-  const handleCrawl = () => {
+  const handleCrawl = async () => {
     setCrawlerActive(true);
-    setTimeout(() => setCrawlerActive(false), 3000);
+    try {
+      await apiFetch('/api/sourcing/run', { method: 'POST' });
+      // Poll a few times as crawlers finish in background
+      setTimeout(refreshLeads, 3000);
+      setTimeout(refreshLeads, 6000);
+      setTimeout(refreshLeads, 9000);
+      setTimeout(() => setCrawlerActive(false), 9000);
+    } catch (e) {
+      console.error(e);
+      setCrawlerActive(false);
+    }
   };
 
   const handleScreen = (id: number) => {

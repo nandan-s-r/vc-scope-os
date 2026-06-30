@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from database.db import SessionLocal, get_db, engine
 from database.models import Base, Startup, Founder, Meeting, Note, Score, Deck, Task, Deal, Portfolio, MonitoringEvent, SourcingLead, OutreachEmail, User
 from config.settings import ENVIRONMENT
+import sourcing
 
 app = FastAPI()
 
@@ -729,6 +730,11 @@ def get_leads(current_user: User = Depends(get_current_user)):
         return results
     finally:
         db.close()
+@app.post("/api/sourcing/run")
+def run_sourcing_crawlers(background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
+    """Triggers the sourcing crawlers in the background."""
+    background_tasks.add_task(sourcing.run_crawlers_and_evaluate)
+    return {"message": "Crawlers started successfully"}
 
 # --- Startups ---
 @app.get("/api/startups")
