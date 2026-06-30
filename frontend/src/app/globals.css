@@ -210,8 +210,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn:hover { background: var(--bg-elevated); border-color: var(--border-highlight); }
-.btn-primary { background: var(--text-primary); color: var(--bg-main); border: none; font-weight: 600; }
-.btn-primary:hover { background: white; transform: translateY(-1px); }
+.btn-primary { background: var(--accent-blue) !important; color: #ffffff !important; border: none; font-weight: 600; }
+.btn-primary:hover { background: var(--accent-cyan) !important; color: #ffffff !important; transform: translateY(-1px); }
 
 /* Standardized Data Tables */
 .data-table {

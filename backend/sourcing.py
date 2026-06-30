@@ -21,7 +21,8 @@ def run_crawlers_and_evaluate():
     prompt = """
     You are an elite Venture Capital scraping engine. 
     Generate 4 highly realistic, top 1% startup leads that were just discovered today.
-    The user is looking for founders with PAST SUCCESSFUL EXPERIENCE and extreme CUSTOMER OBSESSION.
+    The user is looking for startups that scrape or analyze customer obsession signals of products from LinkedIn and Twitter proxies.
+    Each startup must be scrutinized with details about the founder and team (e.g. past successful exits, top engineering pedigree, rapid shipping velocity).
     
     For each lead, it must look like it was scraped from one of these sources: Twitter, LinkedIn, Product Hunt, or HackerNews (Roof).
     
@@ -29,7 +30,7 @@ def run_crawlers_and_evaluate():
     1. "company": (String) Name of the realistic startup
     2. "website": (String) A realistic URL (e.g. https://company.ai)
     3. "source": (String) One of: "Twitter Crawler", "LinkedIn Scraping", "Product Hunt API", "HackerNews Tracker"
-    4. "description": (String) A detailed 2-3 sentence description of the product AND why the founder is top 1% (e.g. "Second-time founder who previously sold X to Y. They are obsessively iterating with early users daily.")
+    4. "description": (String) A detailed 2-3 sentence description of how the product scrapes product obsession signals via LinkedIn/Twitter proxies AND scrutinize the founder & team's background.
     5. "score": (Integer) A score between 85 and 99 representing their customer obsession signal.
     """
     
@@ -38,6 +39,9 @@ def run_crawlers_and_evaluate():
     
     results = []
     try:
+        if not groq_api_key and not gemini_api_key:
+            raise ValueError("No LLM API keys configured. Using high-signal mock fallbacks.")
+            
         if groq_api_key:
             client = Groq(api_key=groq_api_key)
             completion = client.chat.completions.create(
@@ -46,7 +50,6 @@ def run_crawlers_and_evaluate():
                 temperature=0.7,
                 response_format={"type": "json_object"}
             )
-            # Llama3 might wrap the array in an object
             data = json.loads(completion.choices[0].message.content)
             if isinstance(data, dict):
                 results = data.get("leads", []) or data.get("startups", []) or list(data.values())[0]
@@ -69,24 +72,31 @@ def run_crawlers_and_evaluate():
                 results = data
                 
     except Exception as e:
-        print(f"LLM Scraping Simulation failed: {e}")
-        # Fallback realistic data with dynamic names so it always adds new ones
+        print(f"LLM Scraping Simulation failed/skipped: {e}")
+        # Fallback realistic data featuring proxy-scraping customer obsession startups with team scrutiny
         import random
         rand_id = random.randint(100, 999)
         results = [
             {
-                "company": f"Iterate.ai v{rand_id}",
-                "website": f"https://iterate{rand_id}.ai",
+                "company": f"ProxyPulse AI v{rand_id}",
+                "website": f"https://proxypulse{rand_id}.io",
                 "source": "Twitter Crawler",
-                "description": "Founder previously built and sold a DevOps tool. Now building an AI feedback loop tool. They spent the last 30 days sleeping in the office shadowing their first 5 beta testers.",
-                "score": random.randint(85, 99)
+                "description": "Scrapes product obsession signals and user sentiment directly from Twitter/LinkedIn proxies. Scrutiny: Led by Sophia Vance (ex-OpenAI CS researcher) and a team of Stanford CS graduates who previously built developer infra tools. High shipping speed.",
+                "score": random.randint(92, 99)
             },
             {
-                "company": f"RoofTop Stack {rand_id}",
-                "website": f"https://rooftop{rand_id}.dev",
+                "company": f"Obsessify Scraper {rand_id}",
+                "website": f"https://obsessify{rand_id}.co",
+                "source": "LinkedIn Scraping",
+                "description": "Proxy-based scraper monitoring customer obsession metrics, feature requests, and complaints from LinkedIn networks. Scrutiny: Co-founded by Marcus Aurelius (former lead architect at Stripe payments) with a core team of top 1% payment engineers.",
+                "score": random.randint(88, 95)
+            },
+            {
+                "company": f"FeedbackFlow {rand_id}",
+                "website": f"https://feedbackflow{rand_id}.ai",
                 "source": "HackerNews Tracker",
-                "description": "Ex-Stripe engineer building a new payment infrastructure. Releasing updates multiple times a day based on developer Discord feedback. High customer empathy.",
-                "score": random.randint(85, 99)
+                "description": "Aggregates real-time customer feedback by scraping public LinkedIn/Twitter proxy streams. Scrutiny: Serial SaaS founder team with two successful exits. Heavy focus on design simplicity and developer-first documentation.",
+                "score": random.randint(85, 91)
             }
         ]
 
