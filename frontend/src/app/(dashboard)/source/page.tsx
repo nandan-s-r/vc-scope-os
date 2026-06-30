@@ -79,7 +79,12 @@ export default function DealSourcing() {
             className="btn btn-primary"
             onClick={handleCrawl}
             disabled={crawlerActive}
-            style={{ fontSize: '10px', color: crawlerActive ? 'var(--accent-emerald)' : 'var(--text-primary)', borderColor: crawlerActive ? 'var(--accent-emerald)' : undefined }}
+            style={{ 
+              fontSize: '10px', 
+              color: crawlerActive ? 'var(--accent-emerald)' : 'var(--text-primary)', 
+              borderColor: crawlerActive ? 'var(--accent-emerald)' : undefined,
+              backgroundColor: crawlerActive ? '#111111' : undefined 
+            }}
           >
             {crawlerActive ? '⟳ CRAWLERS RUNNING...' : 'RUN CRAWLERS'}
           </button>
