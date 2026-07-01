@@ -474,7 +474,7 @@ async def upload_deck(file: UploadFile = File(...)):
         print("[GROQ] Sending slides to Groq Vision...")
         
         response = client.chat.completions.create(
-            model='llama-3.2-11b-vision-preview',
+            model='llama-3.2-90b-vision-preview',
             messages=[{"role": "user", "content": vision_content}],
             response_format={"type": "json_object"},
             temperature=0.1
