@@ -45,16 +45,27 @@ export default function OutreachTerminal() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [toast, setToast]           = useState('');
 
+  const [identity, setIdentity]     = useState({ sender_name: 'Sarah Jenkins', firm_name: 'SR Capital', tone: 'Professional but direct' });
+  const [savingIdentity, setSavingIdentity] = useState(false);
+
   const selectedFounder = founders.find(f => f.id === selectedId);
 
   useEffect(() => {
     Promise.all([
       apiFetch('/api/founders'),
       apiFetch('/api/outreach'),
-    ]).then(([f, o]) => {
+      apiFetch('/api/auth/me')
+    ]).then(([f, o, u]) => {
       setFounders(f);
       setLogs(o);
       if (f.length > 0) setSelectedId(f[0].id);
+      if (u.outreach_identity) {
+        setIdentity({
+          sender_name: u.outreach_identity.sender_name || 'Sarah Jenkins',
+          firm_name: u.outreach_identity.firm_name || 'SR Capital',
+          tone: u.outreach_identity.tone || 'Professional but direct'
+        });
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -62,6 +73,21 @@ export default function OutreachTerminal() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
+  };
+
+  const handleSaveContext = async () => {
+    setSavingIdentity(true);
+    try {
+      await apiFetch('/api/auth/me/identity', {
+        method: 'POST',
+        body: JSON.stringify({ outreach_identity: identity })
+      });
+      showToast('✓ Identity context saved successfully.');
+    } catch (e) {
+      showToast('✗ Failed to save identity.');
+    } finally {
+      setSavingIdentity(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -75,6 +101,7 @@ export default function OutreachTerminal() {
           startup_name: selectedFounder.startup_name,
           founder_name: selectedFounder.name,
           template_type: template,
+          identity: identity
         }),
       });
       if (res) {
@@ -146,9 +173,47 @@ export default function OutreachTerminal() {
       </div>
 
       {/* Main grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '250px 1.2fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
 
-        {/* LEFT — Composer */}
+        {/* LEFT — Identity Grounding */}
+        <div className="panel" style={{ borderLeft: '2px solid var(--accent-blue)', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
+          <div className="panel-header">Identity Grounding</div>
+          
+          <div>
+            <label className="mono text-muted" style={{ fontSize: '9px', display: 'block', marginBottom: '4px' }}>SENDER NAME</label>
+            <input
+              value={identity.sender_name}
+              onChange={e => setIdentity(prev => ({ ...prev, sender_name: e.target.value }))}
+              style={{ width: '100%', background: 'var(--bg-main)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', padding: '7px', fontSize: '11px', outline: 'none' }}
+            />
+          </div>
+          <div>
+            <label className="mono text-muted" style={{ fontSize: '9px', display: 'block', marginBottom: '4px' }}>FIRM NAME</label>
+            <input
+              value={identity.firm_name}
+              onChange={e => setIdentity(prev => ({ ...prev, firm_name: e.target.value }))}
+              style={{ width: '100%', background: 'var(--bg-main)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', padding: '7px', fontSize: '11px', outline: 'none' }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="mono text-muted" style={{ fontSize: '9px', display: 'block', marginBottom: '4px' }}>AI WRITING TONE</label>
+            <textarea
+              value={identity.tone}
+              onChange={e => setIdentity(prev => ({ ...prev, tone: e.target.value }))}
+              style={{ width: '100%', height: '80px', background: 'var(--bg-main)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', padding: '7px', fontSize: '11px', outline: 'none', resize: 'none' }}
+            />
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ width: '100%', fontSize: '10px' }}
+            onClick={handleSaveContext}
+            disabled={savingIdentity}
+          >
+            {savingIdentity ? 'SAVING...' : 'SAVE CONTEXT'}
+          </button>
+        </div>
+
+        {/* MIDDLE — Composer */}
         <div className="panel panel-elevated" style={{ borderLeft: '2px solid var(--accent-violet)', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
           <div className="panel-header">AI-Assisted Email Composer</div>
 
@@ -219,7 +284,7 @@ export default function OutreachTerminal() {
               {/* From/To preview */}
               {selectedFounder && (
                 <div className="mono" style={{ fontSize: '9px', color: 'var(--text-muted)', borderLeft: '2px solid var(--border-subtle)', paddingLeft: '8px' }}>
-                  FROM: Sarah Jenkins, Partner @ SR Capital<br />
+                  FROM: {identity.sender_name}, Partner @ {identity.firm_name}<br />
                   TO: {selectedFounder.name} &lt;{selectedFounder.email}&gt;
                 </div>
               )}
@@ -270,8 +335,14 @@ export default function OutreachTerminal() {
           </div>
           <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {logs.length === 0 && (
-              <div className="mono text-muted" style={{ fontSize: '10px', padding: '20px', textAlign: 'center' }}>
-                No outreach logged yet — generate and send your first email
+              <div style={{ padding: "60px 20px", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', flex: 1 }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '24px', background: 'rgba(129,140,248,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-violet)', fontSize: '24px' }}>
+                  ✉️
+                </div>
+                <div className="mono" style={{ fontSize: '14px', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>NO CAMPAIGNS SENT</div>
+                <div className="text-muted" style={{ fontSize: '12px', textAlign: 'center', maxWidth: '250px' }}>
+                  Your outreach log is empty. Select a target founder, generate a personalized draft, and transmit it.
+                </div>
               </div>
             )}
             {logs.map(log => (

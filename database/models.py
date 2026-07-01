@@ -18,6 +18,7 @@ class User(Base):
     role = Column(String, default="partner")  # partner | analyst | admin
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    outreach_identity = Column(JSON, nullable=True)
 
 
 class Startup(Base):

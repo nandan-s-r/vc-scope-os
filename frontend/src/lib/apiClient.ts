@@ -26,6 +26,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(url, {
     ...options,
     headers,
+    cache: options.cache || 'no-store',
   });
 
   if (response.status === 401) {

@@ -121,6 +121,24 @@ export default function MeetingsIntelligence() {
                     </td>
                   </tr>
                 ))}
+                {meetings.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "60px 20px" }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '24px', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-emerald)', fontSize: '24px' }}>
+                          🎙️
+                        </div>
+                        <div className="mono" style={{ fontSize: '14px', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>NO AUDIT LOGS</div>
+                        <div className="text-muted" style={{ fontSize: '12px', textAlign: 'center', maxWidth: '300px' }}>
+                          No meetings have been processed yet. Open the Co-Pilot to record and analyze your first pitch.
+                        </div>
+                        <Link href="/copilot">
+                          <button className="btn btn-primary" style={{ marginTop: '8px' }}>LAUNCH CO-PILOT</button>
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

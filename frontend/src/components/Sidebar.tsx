@@ -67,7 +67,7 @@ export default function Sidebar() {
             <div className="nav-section">{group.title}</div>
             {group.links.map((link, j) => {
               const isActive = link.href === '/' 
-                ? (pathname === '/' || pathname.startsWith('/startups')) 
+                ? pathname === '/' 
                 : pathname.startsWith(link.href);
               return (
                 <Link key={j} href={link.href} className={`nav-item ${isActive ? 'active' : ''}`}>
@@ -80,17 +80,19 @@ export default function Sidebar() {
       </nav>
       
       {/* Profile & Settings */}
-      <div style={{ padding: '20px 16px', marginTop: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '8px', borderRadius: '6px', transition: 'background 0.2s ease' }} className="hover-bg-elevated">
-          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-elevated)', marginRight: '12px', border: '1px solid var(--border-highlight)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>VC</span>
-          </div>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>VC Partner</div>
-            <div className="mono" style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>auth: vcap_secure</div>
+      <Link href="/settings" style={{ textDecoration: 'none' }}>
+        <div style={{ padding: '20px 16px', marginTop: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '8px', borderRadius: '6px', transition: 'background 0.2s ease' }} className={`hover-bg-elevated ${pathname.startsWith('/settings') ? 'active' : ''}`}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-elevated)', marginRight: '12px', border: '1px solid var(--border-highlight)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>VC</span>
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>VC Partner</div>
+              <div className="mono" style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>auth: vcap_secure</div>
+            </div>
           </div>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

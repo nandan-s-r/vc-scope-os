@@ -12,6 +12,9 @@ interface GraphNode {
   size: number;
   x?: number;
   y?: number;
+  real_id?: number;
+  trust_score?: number;
+  notes?: string;
 }
 
 interface GraphEdge {
@@ -26,10 +29,16 @@ export default function NetworkGraph() {
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  
+  // Edit state
+  const [editNotes, setEditNotes] = useState('');
+  const [editScore, setEditScore] = useState<number | ''>('');
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
 
-  useEffect(() => {
+  const fetchGraphData = () => {
+    setLoading(true);
     apiFetch('/api/graph-data')
-      
       .then(data => {
         // Position nodes in a circle layout for beautiful static SVG render
         const rawNodes: GraphNode[] = data.nodes;
@@ -54,14 +63,56 @@ export default function NetworkGraph() {
 
         setNodes(nodesWithPos);
         setEdges(data.edges);
-        if (nodesWithPos.length > 0) setSelectedNode(nodesWithPos[0]);
+        
+        // Retain selection
+        if (selectedNode) {
+          const fresh = nodesWithPos.find(n => n.id === selectedNode.id);
+          if (fresh) setSelectedNode(fresh);
+        } else if (nodesWithPos.length > 0) {
+          setSelectedNode(nodesWithPos[0]);
+        }
+        
         setLoading(false);
       })
       .catch(err => {
         console.error(err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchGraphData();
   }, []);
+
+  useEffect(() => {
+    if (selectedNode) {
+      setEditNotes(selectedNode.notes || '');
+      setEditScore(selectedNode.trust_score || '');
+    }
+  }, [selectedNode]);
+
+  const handleSaveNode = async () => {
+    if (!selectedNode || selectedNode.type !== 'founder' || !selectedNode.real_id) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/api/founders/${selectedNode.real_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          notes: editNotes,
+          trust_score: editScore === '' ? null : Number(editScore)
+        })
+      });
+      setToast('Node data saved.');
+      setTimeout(() => setToast(''), 3000);
+      fetchGraphData();
+    } catch (e) {
+      console.error(e);
+      setToast('Failed to save.');
+      setTimeout(() => setToast(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const getNodeEdges = (nodeId: string) => {
     return edges.filter(e => e.source === nodeId || e.target === nodeId);
@@ -160,6 +211,37 @@ export default function NetworkGraph() {
 
                 <h2 style={{ fontSize: '15px', color: selectedNode.color, marginBottom: '2px' }}>{selectedNode.label}</h2>
                 <div className="mono text-muted" style={{ marginBottom: '16px' }}>NODE ID: {selectedNode.id}</div>
+
+                {selectedNode.type === 'founder' && (
+                  <div style={{ marginBottom: '20px', background: 'var(--bg-main)', padding: '12px', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label className="mono text-muted" style={{ fontSize: '9px', display: 'block', marginBottom: '4px' }}>TRUST SCORE</label>
+                      <input 
+                        type="number"
+                        value={editScore}
+                        onChange={e => setEditScore(e.target.value ? Number(e.target.value) : '')}
+                        style={{ width: '100%', background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', padding: '6px', fontSize: '11px', outline: 'none' }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label className="mono text-muted" style={{ fontSize: '9px', display: 'block', marginBottom: '4px' }}>NOTES</label>
+                      <textarea
+                        value={editNotes}
+                        onChange={e => setEditNotes(e.target.value)}
+                        style={{ width: '100%', height: '60px', background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', padding: '6px', fontSize: '11px', outline: 'none', resize: 'none' }}
+                      />
+                    </div>
+                    <button 
+                      className="btn btn-secondary" 
+                      onClick={handleSaveNode}
+                      disabled={saving}
+                      style={{ fontSize: '10px', width: '100%' }}
+                    >
+                      {saving ? 'SAVING...' : 'SAVE NODE DATA'}
+                    </button>
+                    {toast && <div className="mono text-muted" style={{ fontSize: '9px', marginTop: '8px', color: 'var(--accent-emerald)' }}>{toast}</div>}
+                  </div>
+                )}
 
                 <div className="panel-header">Active Relation Connections</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

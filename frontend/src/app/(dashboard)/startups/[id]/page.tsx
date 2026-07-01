@@ -38,7 +38,7 @@ export default function StartupProfile() {
   const [metrics, setMetrics] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [founders, setFounders] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState("intelligence");
+  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [stageUpdating, setStageUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -220,7 +220,35 @@ export default function StartupProfile() {
     }
   };
 
-  const handleDeleteFounder = async (founderId: number) => {
+  
+  const handleAddNote = async () => {
+    if (!newNoteContent.trim()) return;
+    try {
+      const res = await apiFetch(`/api/meetings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startup_id: Number(id),
+          meeting_type: noteType,
+          ai_summary: newNoteContent,
+          duration_minutes: 0,
+          raw_transcript: "",
+          key_concerns: "",
+          action_items: [],
+          founder_score: 0,
+          live_mode_used: false
+        })
+      });
+      // Refresh history
+      const historyData = await apiFetch(`/api/startups/${id}/history`);
+      if (historyData) setHistory(historyData);
+      setNewNoteContent("");
+    } catch (e) {
+      console.error(e);
+      alert("Error adding note");
+    }
+  };
+const handleDeleteFounder = async (founderId: number) => {
     if (!confirm("Are you sure you want to delete this founder?")) return;
     try {
       await apiFetch(`/api/founders/${founderId}`, {
@@ -496,8 +524,8 @@ export default function StartupProfile() {
         <div style={{ flex: 1.8, display: "flex", flexDirection: "column", minWidth: 0, backgroundColor: "var(--bg-elevated)", borderRadius: "6px", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
           
           {/* Tabs row */}
-          <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid var(--border-subtle)", padding: "12px 24px 0 24px", backgroundColor: "var(--bg-surface)" }}>
-            {["intelligence", "meetings", "documents", "financials"].map((tab) => (
+          <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid var(--border-subtle)", padding: "12px 24px 0 24px", backgroundColor: "var(--bg-surface)", overflowX: "auto" }}>
+            {["overview", "founders", "diligence", "notes", "truth engine"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -513,6 +541,7 @@ export default function StartupProfile() {
                   color: activeTab === tab ? "var(--text-primary)" : "var(--text-muted)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
+                  whiteSpace: "nowrap"
                 }}
               >
                 {tab}
@@ -522,10 +551,40 @@ export default function StartupProfile() {
 
           {/* Deep Content area */}
           <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-            
-            {activeTab === "intelligence" && (
+            {activeTab === "overview" && (
               <>
-                {/* Founder Intel */}
+                <div className="panel">
+                  <div className="panel-header" style={{ color: "var(--accent-violet)" }}>
+                    Automated Investment Thesis Summary
+                  </div>
+                  <p style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                    {core?.description || "No deal description available."}
+                  </p>
+                  <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="mono" style={{ fontSize: "10px", color: "var(--text-muted)" }}>ALGORITHMIC INVESTMENT VERDICT:</span>
+                    <span className="mono" style={{ fontSize: "11px", fontWeight: "bold", color: core?.investment_verdict === "INVEST" ? "var(--accent-emerald)" : "var(--accent-amber)" }}>
+                      {core?.investment_verdict || "HOLD / REVIEW"}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+                  <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
+                    <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>ARR RUN RATE</div>
+                    <div style={{ fontSize: "18px", fontWeight: 700 }}>{core?.revenue_arr || "N/A"}</div>
+                  </div>
+                  <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
+                    <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>GROWTH RATE</div>
+                    <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent-emerald)" }}>{metrics?.revenue_growth_pct || "N/A"}</div>
+                  </div>
+                  <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
+                    <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>TARGET VALUATION</div>
+                    <div style={{ fontSize: "18px", fontWeight: 700 }}>{core?.valuation || "N/A"}</div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeTab === "founders" && (
                 <div className="panel">
                   <div className="panel-header" style={{ color: "var(--accent-blue)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>Founder Intelligence Profiles</span>
@@ -608,40 +667,55 @@ export default function StartupProfile() {
                     <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic", padding: "10px 0" }}>No founders mapped.</div>
                   )}
                 </div>
-
-                {/* AI IC Memo */}
-                <div className="panel">
-                  <div className="panel-header" style={{ color: "var(--accent-violet)" }}>
-                    Automated Investment Thesis Summary
-                  </div>
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                    {core.description || "No deal description available."}
-                  </p>
-                  <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="mono" style={{ fontSize: "10px", color: "var(--text-muted)" }}>ALGORITHMIC INVESTMENT VERDICT:</span>
-                    <span className="mono" style={{ fontSize: "11px", fontWeight: "bold", color: core.investment_verdict === "INVEST" ? "var(--accent-emerald)" : "var(--accent-amber)" }}>
-                      {core.investment_verdict || "HOLD / REVIEW"}
-                    </span>
-                  </div>
-                </div>
-              </>
             )}
 
-            {activeTab === "meetings" && (
+            {activeTab === "diligence" && (
+              <div className="panel" style={{ textAlign: "center", padding: "40px", border: "1px dashed var(--border-subtle)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "24px", marginBottom: "8px" }}>📄</div>
+                <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "4px" }}>Diligence Data Room</div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  Upload pitch decks, financials, and legal docs to trigger automatic AI due diligence.
+                </div>
+                <button className="btn btn-primary" style={{marginTop: "12px"}}>UPLOAD DOC</button>
+              </div>
+            )}
+
+            {activeTab === "notes" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {history && history.filter((h) => h.type === "meeting").length > 0 ? (
+                <div className="panel" style={{ padding: "12px" }}>
+                  <textarea 
+                    placeholder="Log a new CRM note..."
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    style={{ width: "100%", background: "transparent", border: "none", color: "white", outline: "none", fontSize: "13px", minHeight: "60px", resize: "vertical" }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                    <select 
+                      className="mono"
+                      value={noteType}
+                      onChange={(e) => setNoteType(e.target.value)}
+                      style={{ background: "var(--bg-main)", border: "1px solid var(--border-subtle)", color: "var(--text-muted)", padding: "4px 8px", fontSize: "10px", borderRadius: "4px" }}
+                    >
+                      <option value="manual">Manual Note</option>
+                      <option value="call">Call Log</option>
+                      <option value="email">Email Sync</option>
+                    </select>
+                    <button onClick={handleAddNote} className="btn btn-primary" style={{ padding: "4px 12px", fontSize: "10px" }} disabled={!newNoteContent.trim()}>SAVE NOTE</button>
+                  </div>
+                </div>
+
+                {history && history.length > 0 ? (
                   history
-                    .filter((h) => h.type === "meeting")
                     .map((m) => (
-                      <div key={m.id} className="panel" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <div key={m.id} className="panel" style={{ display: "flex", flexDirection: "column", gap: "8px", borderLeft: m.type === "meeting" ? "2px solid var(--accent-emerald)" : "2px solid var(--accent-violet)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                          <span style={{ fontWeight: "bold", color: "var(--accent-emerald)" }}>{m.title}</span>
+                          <span style={{ fontWeight: "bold", color: m.type === "meeting" ? "var(--accent-emerald)" : "var(--accent-violet)" }}>{m.title || m.type.toUpperCase()}</span>
                           <span className="mono" style={{ fontSize: "10px", color: "var(--text-muted)" }}>
                             {m.date ? new Date(m.date).toLocaleDateString() : "N/A"}
                           </span>
                         </div>
                         <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
-                          {m.summary || "No automated summary for this stream."}
+                          {m.summary || m.content || "No automated summary for this stream."}
                         </p>
                         {m.transcript && (
                           <details style={{ marginTop: "6px" }}>
@@ -657,74 +731,76 @@ export default function StartupProfile() {
                     ))
                 ) : (
                   <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
-                    No meetings recorded. Select "Live Meeting Copilot" in the sidebar to capture live streams.
+                    No CRM history recorded yet.
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === "documents" && (
-              <div className="panel" style={{ textAlign: "center", padding: "40px", border: "1px dashed var(--border-subtle)", borderRadius: "4px" }}>
-                <div style={{ fontSize: "24px", marginBottom: "8px" }}>📄</div>
-                <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "4px" }}>Document Storage Locked</div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Pitch decks analyzed via the Pitch Deck Analyzer are securely stored. Drop files in the analyzer workflow.
-                </div>
-              </div>
-            )}
-
-            {activeTab === "financials" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {metrics ? (
+            {activeTab === "truth engine" && (
+              <div className="panel" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {!metrics?.truth_data ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", gap: "16px" }}>
+                    <div style={{ width: "48px", height: "48px", borderRadius: "24px", background: "rgba(56,189,248,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)", fontSize: "24px" }}>
+                      👁️
+                    </div>
+                    <div className="mono" style={{ fontSize: "14px", color: "var(--text-primary)", letterSpacing: "0.05em" }}>DEAL TRUTH ENGINE</div>
+                    <div className="text-muted" style={{ fontSize: "12px", textAlign: "center", maxWidth: "350px" }}>
+                      Run an AI audit cross-referencing founder claims, pitch decks, meeting transcripts, and public data to generate a verification scorecard.
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: "8px" }} disabled={stageUpdating} onClick={async () => {
+                      setStageUpdating(true);
+                      try {
+                        const res = await apiFetch("/api/truth-engine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ startup_id: Number(id) }) });
+                        setMetrics({ ...metrics, truth_data: res });
+                      } catch (e) {
+                        console.error(e);
+                        alert("Error running truth engine");
+                      }
+                      setStageUpdating(false);
+                    }}>
+                      {stageUpdating ? "RUNNING AUDIT..." : "RUN VERIFICATION AUDIT"}
+                    </button>
+                  </div>
+                ) : (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-                      <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
-                        <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>ARR RUN RATE</div>
-                        <div style={{ fontSize: "18px", fontWeight: 700 }}>{metrics.revenue_arr || "N/A"}</div>
-                      </div>
-                      <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
-                        <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>GROWTH RATE</div>
-                        <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent-emerald)" }}>{metrics.revenue_growth_pct || "N/A"}</div>
-                      </div>
-                      <div className="panel" style={{ textAlign: "center", padding: "16px" }}>
-                        <div className="mono text-muted" style={{ fontSize: "9px", marginBottom: "4px" }}>TARGET VALUATION</div>
-                        <div style={{ fontSize: "18px", fontWeight: 700 }}>{metrics.valuation || "N/A"}</div>
-                      </div>
+                    <div className="panel-header" style={{ color: "var(--accent-blue)" }}>
+                      AI Due Diligence Scorecard
+                      <span className="mono" style={{ float: "right", fontSize: "12px", color: "var(--accent-emerald)" }}>CONFIDENCE: {metrics.truth_data.confidence_score}/100</span>
+                    </div>
+                    
+                    <div>
+                      <div className="mono" style={{ fontSize: "11px", color: "var(--accent-emerald)", marginBottom: "8px" }}>✓ VERIFIED CLAIMS</div>
+                      <ul style={{ fontSize: "13px", color: "var(--text-primary)", paddingLeft: "20px", margin: 0 }}>
+                        {metrics.truth_data.verified_claims?.map((c: string, i: number) => <li key={i} style={{ marginBottom: "6px" }}>{c}</li>)}
+                      </ul>
                     </div>
 
-                    <div className="panel" style={{ padding: "20px" }}>
-                      <div className="panel-header" style={{ fontSize: "11px", borderBottomColor: "rgba(255,255,255,0.05)" }}>
-                        Capital Runway Telemetry
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-around", marginTop: "12px", textAlign: "center" }}>
-                        <div>
-                          <div className="mono text-muted" style={{ fontSize: "9px" }}>RUNWAY LIMIT</div>
-                          <div style={{ fontSize: "20px", fontWeight: 700, marginTop: "4px" }}>
-                            {metrics.runway_months || "?"} <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: "normal" }}>mo</span>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="mono text-muted" style={{ fontSize: "9px" }}>NET BURN RATE</div>
-                          <div style={{ fontSize: "20px", fontWeight: 700, marginTop: "4px" }}>{metrics.burn_rate || "?"}</div>
-                        </div>
-                        <div>
-                          <div className="mono text-muted" style={{ fontSize: "9px" }}>RISK CLASSIFICATION</div>
-                          <div style={{ fontSize: "20px", fontWeight: 700, marginTop: "4px", color: metrics.risk_level === "HIGH" ? "var(--accent-red)" : "var(--accent-emerald)" }}>
-                            {metrics.risk_level || "UNKNOWN"}
-                          </div>
-                        </div>
-                      </div>
+                    <div style={{ marginTop: "16px" }}>
+                      <div className="mono" style={{ fontSize: "11px", color: "var(--accent-amber)", marginBottom: "8px" }}>⚠ UNSUPPORTED CLAIMS</div>
+                      <ul style={{ fontSize: "13px", color: "var(--text-primary)", paddingLeft: "20px", margin: 0 }}>
+                        {metrics.truth_data.unsupported_claims?.map((c: string, i: number) => <li key={i} style={{ marginBottom: "6px" }}>{c}</li>)}
+                      </ul>
+                    </div>
+
+                    <div style={{ marginTop: "16px" }}>
+                      <div className="mono" style={{ fontSize: "11px", color: "var(--accent-red)", marginBottom: "8px" }}>✗ CONTRADICTIONS</div>
+                      <ul style={{ fontSize: "13px", color: "var(--text-primary)", paddingLeft: "20px", margin: 0 }}>
+                        {metrics.truth_data.contradictions?.map((c: string, i: number) => <li key={i} style={{ marginBottom: "6px" }}>{c}</li>)}
+                      </ul>
+                    </div>
+
+                    <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-main)", borderRadius: "6px" }}>
+                      <div className="mono" style={{ fontSize: "11px", color: "var(--accent-violet)", marginBottom: "8px" }}>? RECOMMENDED INVESTOR QUESTIONS</div>
+                      <ul style={{ fontSize: "13px", color: "var(--text-primary)", paddingLeft: "20px", margin: 0 }}>
+                        {metrics.truth_data.investor_questions?.map((c: string, i: number) => <li key={i} style={{ marginBottom: "6px" }}>{c}</li>)}
+                      </ul>
                     </div>
                   </>
-                ) : (
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>
-                    Financial matrices not indexed for this asset.
-                  </div>
                 )}
               </div>
             )}
-
-          </div>
+</div>
         </div>
 
         {/* Right Column: Intelligent Activity Feed (Audit Log) + Notes logging */}

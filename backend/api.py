@@ -131,6 +131,9 @@ class MeetingUpdate(BaseModel):
 class CopilotAnalyzeRequest(BaseModel):
     transcript: str
 
+class TruthEngineRequest(BaseModel):
+    startup_id: int
+
 class OutreachGenerateRequest(BaseModel):
     startup_name: str
     founder_name: Optional[str] = ""
@@ -341,7 +344,43 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
 
 @app.get("/api/auth/me")
 def read_users_me(current_user: User = Depends(get_current_user)):
-    return {"email": current_user.email, "name": current_user.full_name, "role": current_user.role}
+    return {
+        "email": current_user.email,
+        "name": current_user.full_name,
+        "role": current_user.role,
+        "outreach_identity": current_user.outreach_identity
+    }
+
+@app.put("/api/auth/me")
+def update_users_me(payload: dict = Body(...), current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if "name" in payload and payload["name"]:
+            user.full_name = payload["name"]
+        if "role" in payload and payload["role"]:
+            user.role = payload["role"]
+        db.commit()
+        return {"message": "Profile updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/api/auth/me/identity")
+def update_user_identity(payload: dict = Body(...), current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        user.outreach_identity = payload.get("outreach_identity", {})
+        db.commit()
+        return {"message": "Identity updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 
 
@@ -569,6 +608,22 @@ def create_meeting(payload: MeetingCreate, current_user: User = Depends(get_curr
         db.add(new_meeting)
         db.commit()
         db.refresh(new_meeting)
+
+        # Extract tasks from action items
+        if payload.action_items:
+            for item in payload.action_items:
+                new_task = Task(
+                    title=item,
+                    startup_id=payload.startup_id,
+                    assignee=current_user.full_name,
+                    due_date=datetime.utcnow(),
+                    priority="High",
+                    status="Pending",
+                    source="Meeting Copilot"
+                )
+                db.add(new_task)
+            db.commit()
+
         return {"id": new_meeting.id, "message": "Meeting logged successfully"}
     except Exception as e:
         db.rollback()
@@ -1125,7 +1180,8 @@ def get_graph_data(current_user: User = Depends(get_current_user)):
                 "label": s.name,
                 "type": "startup",
                 "color": "#38BDF8",
-                "size": 18
+                "size": 18,
+                "real_id": s.id
             })
             
             # Link from VC to startup if invested or under IC review
@@ -1143,7 +1199,10 @@ def get_graph_data(current_user: User = Depends(get_current_user)):
                 "label": f.name,
                 "type": "founder",
                 "color": "#10B981",
-                "size": 14
+                "size": 14,
+                "real_id": f.id,
+                "trust_score": f.trust_score,
+                "notes": f.notes
             })
             
             # Link from founder to their startup
@@ -1694,3 +1753,57 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
 
+
+@app.post("/api/truth-engine")
+def run_truth_engine(payload: TruthEngineRequest, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        startup = db.query(Startup).filter(Startup.id == payload.startup_id).first()
+        if not startup:
+            raise HTTPException(status_code=404, detail="Startup not found")
+
+        founders = db.query(Founder).filter(Founder.startup_id == payload.startup_id).all()
+        meetings = db.query(Meeting).filter(Meeting.startup_id == payload.startup_id).all()
+        decks = db.query(Deck).filter(Deck.startup_id == payload.startup_id).all()
+
+        prompt = f'''
+        You are the VC Scope OS Deal Truth Engine. Your job is to act as a cynical, highly analytical due diligence auditor for a venture capital firm.
+        
+        You are auditing a startup named {startup.name} in the {startup.sector} space.
+        
+        Here are the claims they make:
+        - Revenue ARR: {startup.revenue_arr}
+        - Description: {startup.description}
+        - Problem: {startup.problem}
+        - Solution: {startup.solution}
+        - Moat: {startup.moat}
+        
+        Founders: {[{'name': f.name, 'background': f.background} for f in founders]}
+        Meeting Transcripts & AI Summaries: {[{'summary': m.ai_summary, 'concerns': m.key_concerns} for m in meetings]}
+        Deck Content: {[d.extracted_text for d in decks]}
+        
+        Cross-reference the startup claims with their meeting transcripts, deck contents, and founder backgrounds.
+        Output ONLY a JSON payload with NO markdown block formatting, in this exact structure:
+        {{
+            "verified_claims": ["Claim 1", "Claim 2"],
+            "unsupported_claims": ["Claim 1"],
+            "contradictions": ["Contradiction 1"],
+            "investor_questions": ["Question 1"],
+            "confidence_score": 75
+        }}
+        '''
+
+        import google.generativeai as genai
+        import json
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:-3]
+        
+        return json.loads(text)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
