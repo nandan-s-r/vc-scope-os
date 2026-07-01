@@ -559,6 +559,11 @@ def create_meeting(payload: MeetingCreate, current_user: User = Depends(get_curr
             meeting_type=payload.meeting_type,
             ai_summary=payload.ai_summary,
             duration_minutes=payload.duration_minutes,
+            raw_transcript=payload.raw_transcript,
+            key_concerns=payload.key_concerns,
+            action_items=payload.action_items,
+            founder_score=payload.founder_score,
+            live_mode_used=payload.live_mode_used,
             scheduled_at=datetime.utcnow()
         )
         db.add(new_meeting)
@@ -681,6 +686,23 @@ def get_leads(current_user: User = Depends(get_current_user)):
                 "discovered_at": l.discovered_at.isoformat() if l.discovered_at else None
             })
         return results
+    finally:
+        db.close()
+
+@app.put("/api/leads/{lead_id}")
+def update_lead(lead_id: int, payload: dict = Body(...), current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        lead = db.query(SourcingLead).filter(SourcingLead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        if "status" in payload:
+            lead.status = payload["status"]
+        db.commit()
+        return {"message": "Lead updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 @app.post("/api/sourcing/run")
@@ -1208,8 +1230,38 @@ def generate_memo(payload: MemoGenerateRequest, current_user: User = Depends(get
     
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "your_gemini_api_key_here":
+        desc = startup.description if (startup and startup.description) else "Data not provided"
+        sector = startup.sector if (startup and startup.sector) else "Data not provided"
+        prob = startup.problem if (startup and startup.problem) else "Data not provided"
+        sol = startup.solution if (startup and startup.solution) else "Data not provided"
+        moat = startup.moat if (startup and startup.moat) else "Data not provided"
+        rev = startup.revenue_arr if (startup and startup.revenue_arr) else "Data not provided"
+        verdict = startup.investment_verdict if (startup and startup.investment_verdict) else "HOLD"
+        
+        memo_md = f"""# Investment Committee Memo: {startup_name}
+
+## Executive Summary
+{desc}
+
+## The Market & Problem
+- **Sector:** {sector}
+- **Problem Statement:** {prob}
+
+## The Solution & Moat
+- **Product Solution:** {sol}
+- **Competitive Defensibility (Moat):** {moat}
+
+## Traction & Economics
+- **Current ARR:** {rev}
+
+## Key Risks (Red Flags)
+- {"No significant risks flagged in current dataset" if startup else "Data not provided"}
+
+## Final Verdict
+**AI Verdict:** {verdict}
+"""
         return {
-            "memo_markdown": f"# Investment Committee Memo: {startup_name}\\n\\n## Executive Summary\\n{startup.description if startup else 'N/A'}\\n\\n## Verdict\\n{startup.investment_verdict if startup else 'HOLD'}\\n\\n*(Mocked response. Configure GEMINI_API_KEY for dynamic memos)*"
+            "memo_markdown": memo_md
         }
         
     try:
@@ -1630,6 +1682,8 @@ def generate_outreach(req: OutreachGenerateRequest, current_user: User = Depends
     try:
         # Get current user name, default firm to "SR Capital" for demo (could be added to User model)
         sender_name = current_user.full_name or "Sarah Jenkins"
+        if sender_name == "SR Admin":
+            sender_name = "Sarah Jenkins"
         sender_firm = "SR Capital" 
         result = ai_utils.generate_outreach_email(req.startup_name, req.founder_name, req.template_type, sender_name, sender_firm)
         return result

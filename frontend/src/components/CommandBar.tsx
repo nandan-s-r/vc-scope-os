@@ -14,10 +14,12 @@ export default function CommandBar() {
       else if (q === '/deck') router.push('/deck');
       else if (q === '/startups') router.push('/startups');
       else if (q === '/meetings') router.push('/meetings');
+      else if (q === '/graph') router.push('/graph');
+      else if (q === '/outreach') router.push('/outreach');
       else if (q.startsWith('/')) alert(`Unknown command: ${q}`);
       else if (q) {
-        // Just route to startups with a simple alert for now
-        alert(`Search for "${q}" is not yet fully implemented on the backend.`);
+        // Route to search (which is currently a demo unavailable page)
+        router.push(`/search?q=${encodeURIComponent(q)}`);
       }
       setQuery('');
     }

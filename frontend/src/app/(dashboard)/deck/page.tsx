@@ -119,14 +119,22 @@ export default function PitchDeckAnalyzer() {
   };
 
   const processFile = async (file: File) => {
+    setLogs([]);
+    setResult(null);
+
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      addLog('ERROR: Only PDF files are accepted.', 'error');
+      setStatus('error');
+      addLog('ERROR: Incompatible file type detected. Only PDF pitch decks are supported.', 'error');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setStatus('error');
+      addLog('ERROR: File size exceeds the maximum limit of 10MB. Please optimize your PDF and upload again.', 'error');
       return;
     }
 
     setStatus('uploading');
-    setLogs([]);
-    setResult(null);
 
     addLog('INITIATING SECURE DOCUMENT INGESTION PIPELINE', 'system');
     addLog(`FILE_DETECTED: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`, 'info');

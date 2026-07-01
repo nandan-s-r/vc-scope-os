@@ -95,7 +95,14 @@ export default function DealSourcing() {
           pipeline_stage: 'Sourced',
         }),
       });
+      // Mark lead as converted
+      await apiFetch(`/api/leads/${lead.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Converted' }),
+      });
       showToast(`✓ "${lead.company_name}" added to Startups Database.`);
+      refreshLeads();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Conversion failed';
       showToast(`✗ Failed: ${msg}`);
