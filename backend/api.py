@@ -456,32 +456,29 @@ async def upload_deck(file: UploadFile = File(...)):
         }
         """
         
-        vision_content = [{"type": "text", "text": prompt}]
-        
+        gemini_content = [prompt]
+
         for i in range(min(5, len(doc))):
             page = doc.load_page(i)
             pix = page.get_pixmap()
             img_bytes = pix.tobytes("png")
-            b64_img = base64.b64encode(img_bytes).decode('utf-8')
-            vision_content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64_img}"}
-            })
-            
-        if len(vision_content) == 1:
+            gemini_content.append({"mime_type": "image/png", "data": img_bytes})
+
+        if len(gemini_content) == 1:
             raise HTTPException(status_code=400, detail="No readable slides found in PDF.")
 
-        print("[GROQ] Sending slides to Groq Vision...")
+        print("[GEMINI] Sending slides to Gemini Vision...")
+        import google.generativeai as genai
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
         
-        response = client.chat.completions.create(
-            model='llama-3.2-90b-vision-preview',
-            messages=[{"role": "user", "content": vision_content}],
-            response_format={"type": "json_object"},
-            temperature=0.1
-        )
-        print("[OK] Received Groq response")
+        genai.configure(api_key=gemini_api_key)
+        gemini_model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"response_mime_type": "application/json", "temperature": 0.1})
+        response = gemini_model.generate_content(gemini_content)
         
-        parsed_data = parse_gemini_json(response.choices[0].message.content)
+        print("[OK] Received Gemini response")
+        parsed_data = parse_gemini_json(response.text)
         if not parsed_data:
             raise HTTPException(status_code=500, detail="Failed to parse JSON from Gemini. " + response.text[:100])
             
